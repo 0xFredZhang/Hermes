@@ -1,0 +1,8 @@
+{{define "content"}}
+<h2>登录</h2>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<form method="post" action="/login">
+  <input type="password" name="password" placeholder="口令" autofocus>
+  <button type="submit">登录</button>
+</form>
+{{end}}

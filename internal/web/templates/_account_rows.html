@@ -1,0 +1,11 @@
+{{define "rows"}}
+{{range .}}
+<tr>
+  <td>{{.Name}}</td><td>{{.DefaultRegion}}</td><td>{{.AWSAccountID}}</td><td>{{.ARN}}</td>
+  <td><button hx-delete="/accounts/{{.ID}}" hx-target="#rows" hx-swap="innerHTML"
+              hx-confirm="删除该账号?">删除</button></td>
+</tr>
+{{else}}
+<tr><td colspan="5">暂无账号,添加一个吧。</td></tr>
+{{end}}
+{{end}}

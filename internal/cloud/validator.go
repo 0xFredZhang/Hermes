@@ -22,6 +22,9 @@ type Validator struct {
 	// NewClient builds an STS client for the given static credentials.
 	// Overridable in tests.
 	NewClient func(accessKey, secret, region string) STSClient
+	// ValidateFunc, when set, short-circuits Validate. Used in tests to
+	// inject a fake identity without touching AWS.
+	ValidateFunc func(ctx context.Context, accessKey, secret, region string) (Identity, error)
 }
 
 func NewValidator() *Validator {
@@ -36,6 +39,9 @@ func NewValidator() *Validator {
 }
 
 func (v *Validator) Validate(ctx context.Context, accessKey, secret, region string) (Identity, error) {
+	if v.ValidateFunc != nil {
+		return v.ValidateFunc(ctx, accessKey, secret, region)
+	}
 	client := v.NewClient(accessKey, secret, region)
 	out, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {

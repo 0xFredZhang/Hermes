@@ -1,0 +1,16 @@
+{{define "content"}}
+<form method="post" action="/logout" style="float:right"><button>退出</button></form>
+<h2>AWS 云账号</h2>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<form hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML">
+  <input name="name" placeholder="别名" required>
+  <input name="default_region" placeholder="区域 如 ap-southeast-1" required>
+  <input name="access_key_id" placeholder="Access Key ID" required>
+  <input name="secret_access_key" placeholder="Secret Access Key" required>
+  <button type="submit">添加并验证</button>
+</form>
+<table>
+  <thead><tr><th>别名</th><th>区域</th><th>Account ID</th><th>ARN</th><th></th></tr></thead>
+  <tbody id="rows">{{template "rows" .Accounts}}</tbody>
+</table>
+{{end}}

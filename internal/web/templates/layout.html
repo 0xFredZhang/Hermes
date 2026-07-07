@@ -1,0 +1,18 @@
+{{define "layout"}}<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hermes</title>
+  <script src="/static/htmx.min.js"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:880px;margin:2rem auto;padding:0 1rem}
+    table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.5rem;text-align:left}
+    input,button{padding:.4rem;margin:.2rem 0}.err{color:#b00}
+  </style>
+</head>
+<body>
+  <h1>Hermes</h1>
+  {{template "content" .}}
+</body>
+</html>{{end}}
