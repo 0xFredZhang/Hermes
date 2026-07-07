@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,10 @@ type CloudAccount struct {
 	ARN             string
 	CreatedAt       time.Time
 }
+
+// ErrDuplicateAccount is returned by CreateCloudAccount when a cloud account
+// with the same AWS account id already exists (enforced by a unique index).
+var ErrDuplicateAccount = errors.New("a cloud account with this AWS account id already exists")
 
 func (s *Store) CreateCloudAccount(ctx context.Context, a CloudAccount) (int64, error) {
 	enc, err := s.cipher.Encrypt(a.SecretAccessKey)
@@ -32,6 +38,9 @@ func (s *Store) CreateCloudAccount(ctx context.Context, a CloudAccount) (int64, 
 		a.Name, a.Provider, a.DefaultRegion, a.AccessKeyID, enc, a.AWSAccountID, a.ARN,
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, ErrDuplicateAccount
+		}
 		return 0, err
 	}
 	return res.LastInsertId()

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -85,5 +86,21 @@ func TestDeleteCloudAccount(t *testing.T) {
 	}
 	if _, err := s.GetCloudAccount(ctx, id); err == nil {
 		t.Fatal("expected error getting deleted account")
+	}
+}
+
+func TestCreateCloudAccount_RejectsDuplicateAWSAccount(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if _, err := s.CreateCloudAccount(ctx, sampleAccount()); err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	// Same aws_account_id (even with a different name/key) must be rejected.
+	dup := sampleAccount()
+	dup.Name = "prod-copy"
+	dup.AccessKeyID = "AKIAOTHER"
+	if _, err := s.CreateCloudAccount(ctx, dup); !errors.Is(err, ErrDuplicateAccount) {
+		t.Fatalf("second Create with same aws_account_id: got %v, want ErrDuplicateAccount", err)
 	}
 }

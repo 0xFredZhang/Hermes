@@ -110,3 +110,30 @@ func TestCreateAccount_InvalidCredentials(t *testing.T) {
 		t.Fatalf("account should not be persisted on validation failure; got %d accounts", len(list))
 	}
 }
+
+func TestCreateAccount_Duplicate(t *testing.T) {
+	deps := testDeps(t)
+	form := url.Values{
+		"name":              {"prod"},
+		"default_region":    {"ap-southeast-1"},
+		"access_key_id":     {"AKIA"},
+		"secret_access_key": {"secret"},
+	}
+	// First add succeeds.
+	if rec := authedCreate(t, deps, form); rec.Code != http.StatusOK {
+		t.Fatalf("first add: status = %d", rec.Code)
+	}
+	// Second add of the same validated AWS account is rejected with a friendly
+	// message (200 so htmx swaps it), and no second row is persisted.
+	rec := authedCreate(t, deps, form)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second add: status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "已添加") {
+		t.Fatalf("second add should show duplicate message; got %s", rec.Body.String())
+	}
+	list, _ := deps.Store.ListCloudAccounts(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("duplicate must not create a second account; got %d", len(list))
+	}
+}

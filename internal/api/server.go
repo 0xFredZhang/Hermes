@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"html"
 	"net/http"
 	"strconv"
@@ -88,6 +89,12 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 	acc.AWSAccountID = id.AccountID
 	acc.ARN = id.ARN
 	if _, err := d.Store.CreateCloudAccount(r.Context(), acc); err != nil {
+		if errors.Is(err, store.ErrDuplicateAccount) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">该 AWS 账号(` + html.EscapeString(acc.AWSAccountID) + `)已添加</td></tr>`))
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
