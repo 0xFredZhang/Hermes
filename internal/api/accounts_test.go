@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -79,5 +80,33 @@ func TestCreateAccount_RequiresAuth(t *testing.T) {
 	NewRouter(deps).ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("unauthenticated create: status = %d, want 303", rec.Code)
+	}
+}
+
+func TestCreateAccount_InvalidCredentials(t *testing.T) {
+	deps := testDeps(t)
+	// Override validator to fail
+	deps.Validator.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
+		return cloud.Identity{}, errors.New("InvalidClientTokenId")
+	}
+	form := url.Values{
+		"name":              {"prod"},
+		"default_region":    {"ap-southeast-1"},
+		"access_key_id":     {"AKIA"},
+		"secret_access_key": {"bad"},
+	}
+	rec := authedCreate(t, deps, form)
+	// Should return 200 so htmx swaps the error row
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	// Response should contain the error message
+	if !strings.Contains(rec.Body.String(), "凭证验证失败") {
+		t.Fatalf("response should contain validation error; got %s", rec.Body.String())
+	}
+	// Account should not be persisted
+	list, _ := deps.Store.ListCloudAccounts(context.Background())
+	if len(list) != 0 {
+		t.Fatalf("account should not be persisted on validation failure; got %d accounts", len(list))
 	}
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"strconv"
 
@@ -79,8 +80,9 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 	}
 	id, err := d.Validator.Validate(r.Context(), acc.AccessKeyID, acc.SecretAccessKey, acc.DefaultRegion)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">凭证验证失败:` + err.Error() + `</td></tr>`))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">凭证验证失败:` + html.EscapeString(err.Error()) + `</td></tr>`))
 		return
 	}
 	acc.AWSAccountID = id.AccountID
