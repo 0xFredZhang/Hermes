@@ -72,18 +72,23 @@ func NewRouter(d Deps) http.Handler {
 	return d.Auth.Middleware(mux)
 }
 
+// validationRegion is used only to build the STS client for credential
+// validation. STS GetCallerIdentity is a global call, so any valid region
+// works and the user never has to pick one. The per-deployment region is
+// chosen later (when provisioning resources), not when adding an account.
+const validationRegion = "us-east-1"
+
 func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 	acc := store.CloudAccount{
 		Name:            r.FormValue("name"),
-		DefaultRegion:   r.FormValue("default_region"),
 		AccessKeyID:     r.FormValue("access_key_id"),
 		SecretAccessKey: r.FormValue("secret_access_key"),
 	}
-	id, err := d.Validator.Validate(r.Context(), acc.AccessKeyID, acc.SecretAccessKey, acc.DefaultRegion)
+	id, err := d.Validator.Validate(r.Context(), acc.AccessKeyID, acc.SecretAccessKey, validationRegion)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">凭证验证失败:` + html.EscapeString(err.Error()) + `</td></tr>`))
+		_, _ = w.Write([]byte(`<tr><td colspan="4" class="err">凭证验证失败:` + html.EscapeString(err.Error()) + `</td></tr>`))
 		return
 	}
 	acc.AWSAccountID = id.AccountID
@@ -92,7 +97,7 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 		if errors.Is(err, store.ErrDuplicateAccount) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">该 AWS 账号(` + html.EscapeString(acc.AWSAccountID) + `)已添加</td></tr>`))
+			_, _ = w.Write([]byte(`<tr><td colspan="4" class="err">该 AWS 账号(` + html.EscapeString(acc.AWSAccountID) + `)已添加</td></tr>`))
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)

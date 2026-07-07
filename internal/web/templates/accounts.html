@@ -5,14 +5,13 @@
 <form hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML"
       hx-disabled-elt="find button" hx-indicator="#add-status">
   <input name="name" placeholder="别名" required>
-  <input name="default_region" placeholder="区域 如 ap-southeast-1" required>
   <input name="access_key_id" placeholder="Access Key ID" required>
   <input name="secret_access_key" placeholder="Secret Access Key" required>
   <button type="submit">添加并验证</button>
   <span id="add-status" class="htmx-indicator">验证中…</span>
 </form>
 <table>
-  <thead><tr><th>别名</th><th>区域</th><th>Account ID</th><th>ARN</th><th></th></tr></thead>
+  <thead><tr><th>别名</th><th>Account ID</th><th>ARN</th><th></th></tr></thead>
   <tbody id="rows">{{template "rows" .Accounts}}</tbody>
 </table>
 {{end}}
