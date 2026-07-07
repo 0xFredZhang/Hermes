@@ -1517,6 +1517,7 @@ package api
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"strconv"
 
@@ -1594,8 +1595,11 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 	}
 	id, err := d.Validator.Validate(r.Context(), acc.AccessKeyID, acc.SecretAccessKey, acc.DefaultRegion)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">凭证验证失败:` + err.Error() + `</td></tr>`))
+		// Return 200 (not 4xx): htmx only swaps 2xx responses by default, so an
+		// error status would drop this row and the user would see nothing. Escape
+		// the error text before interpolating it into HTML.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<tr><td colspan="5" class="err">凭证验证失败:` + html.EscapeString(err.Error()) + `</td></tr>`))
 		return
 	}
 	acc.AWSAccountID = id.AccountID
