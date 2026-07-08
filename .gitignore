@@ -33,6 +33,9 @@ go.work.sum
 *.db-wal
 *.db-journal
 
+# runtime data: SQLite DB + local Pulumi state backend (file://.../data/pulumi-state)
+/data/
+
 # Editor/IDE
 # .idea/
 # .vscode/
