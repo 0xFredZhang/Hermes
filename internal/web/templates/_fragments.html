@@ -1,0 +1,48 @@
+{{define "project_rows"}}
+{{range .}}
+<tr>
+  <td>{{.Name}}</td><td>{{.Description}}</td>
+  <td><button hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除该项目?">删除</button></td>
+</tr>
+{{else}}
+<tr><td colspan="3" class="muted">暂无项目</td></tr>
+{{end}}
+{{end}}
+
+{{define "blueprint_rows"}}
+{{range .}}
+<tr>
+  <td>{{.Name}}</td><td>{{.Params.Region}}</td><td>{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
+  <td>
+    <form method="post" action="/blueprints/{{.ID}}/deploy" style="display:inline">
+      <input name="env_name" placeholder="环境名" required style="width:7rem">
+      <button type="submit">部署</button>
+    </form>
+    <button hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除该蓝图?">删除</button>
+  </td>
+</tr>
+{{else}}
+<tr><td colspan="4" class="muted">暂无蓝图</td></tr>
+{{end}}
+{{end}}
+
+{{define "env_status"}}
+<div id="status" hx-get="/environments/{{.Env.ID}}/status" hx-trigger="every 2s" hx-swap="outerHTML">
+  <p>状态:<strong>{{.Env.Status}}</strong></p>
+  {{if eq .Env.Status "preview_ready"}}
+    <p>预演:{{.Plan}}</p>
+    <form method="post" action="/environments/{{.Env.ID}}/up" style="display:inline"><button>确认创建</button></form>
+    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+  {{else if eq .Env.Status "up"}}
+    <p class="ok">已就绪</p>
+    {{if .PublicIPs}}<p>公网 IP:{{.PublicIPs}}</p>{{end}}
+    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+  {{else if eq .Env.Status "failed"}}
+    <p class="err">失败</p>
+    <form method="post" action="/environments/{{.Env.ID}}/retry" style="display:inline"><button>重试</button></form>
+    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+  {{else if eq .Env.Status "destroyed"}}
+    <p class="muted">已销毁</p>
+  {{end}}
+</div>
+{{end}}

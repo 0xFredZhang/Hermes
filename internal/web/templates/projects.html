@@ -1,0 +1,13 @@
+{{define "content"}}
+<h2>项目</h2>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<form hx-post="/projects" hx-target="#project-rows" hx-swap="innerHTML">
+  <input name="name" placeholder="项目名" required>
+  <input name="description" placeholder="描述(可选)">
+  <button type="submit">新建项目</button>
+</form>
+<table>
+  <thead><tr><th>名称</th><th>描述</th><th></th></tr></thead>
+  <tbody id="project-rows">{{template "project_rows" .Projects}}</tbody>
+</table>
+{{end}}

@@ -1,5 +1,4 @@
 {{define "content"}}
-<form method="post" action="/logout" style="float:right"><button>退出</button></form>
 <h2>AWS 云账号</h2>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML"

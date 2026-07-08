@@ -14,18 +14,28 @@ var templatesFS embed.FS
 var StaticFS embed.FS
 
 type Renderer struct {
-	pages map[string]*template.Template
+	pages    map[string]*template.Template
+	partials *template.Template
 }
 
-// NewRenderer parses each page template together with the shared layout and rows partial.
+// NewRenderer parses each page together with the layout and all fragment files,
+// plus a standalone partial set for htmx swaps.
 func NewRenderer() (*Renderer, error) {
-	shared := []string{"templates/layout.html", "templates/_account_rows.html"}
-	pages := map[string]string{
-		"login":    "templates/login.html",
-		"accounts": "templates/accounts.html",
+	shared := []string{
+		"templates/layout.html",
+		"templates/_account_rows.html",
+		"templates/_fragments.html",
+	}
+	pageFiles := map[string]string{
+		"login":              "templates/login.html",
+		"accounts":           "templates/accounts.html",
+		"projects":           "templates/projects.html",
+		"blueprints":         "templates/blueprints.html",
+		"environments":       "templates/environments.html",
+		"environment_detail": "templates/environment_detail.html",
 	}
 	r := &Renderer{pages: map[string]*template.Template{}}
-	for name, file := range pages {
+	for name, file := range pageFiles {
 		files := append([]string{file}, shared...)
 		t, err := template.ParseFS(templatesFS, files...)
 		if err != nil {
@@ -33,12 +43,12 @@ func NewRenderer() (*Renderer, error) {
 		}
 		r.pages[name] = t
 	}
-	// standalone partial for htmx swaps
-	partial, err := template.ParseFS(templatesFS, "templates/_account_rows.html")
+	partials, err := template.ParseFS(templatesFS,
+		"templates/_account_rows.html", "templates/_fragments.html")
 	if err != nil {
 		return nil, err
 	}
-	r.pages["rows"] = partial
+	r.partials = partials
 	return r, nil
 }
 
@@ -49,7 +59,12 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	}
 }
 
-// RenderRows writes just the <tbody> content for htmx partial swaps.
+// RenderPartial writes a single named fragment (for htmx swaps).
+func (r *Renderer) RenderPartial(w io.Writer, name string, data any) error {
+	return r.partials.ExecuteTemplate(w, name, data)
+}
+
+// RenderRows writes the cloud-account rows fragment (kept for the M1 accounts flow).
 func (r *Renderer) RenderRows(w io.Writer, accounts any) error {
-	return r.pages["rows"].ExecuteTemplate(w, "rows", accounts)
+	return r.partials.ExecuteTemplate(w, "rows", accounts)
 }
