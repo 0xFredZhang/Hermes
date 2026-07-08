@@ -7,14 +7,16 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ssm"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
 )
 
-// al2023SSMParam resolves the latest Amazon Linux 2023 AMI per region.
-const al2023SSMParam = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+// al2023NameFilter matches the latest standard Amazon Linux 2023 x86_64 AMIs
+// (the "al2023-ami-2023.*" prefix excludes the "-minimal-" variants). Resolved
+// via ec2:DescribeImages, so the blueprint's cloud account needs no extra
+// ssm:GetParameter permission.
+const al2023NameFilter = "al2023-ami-2023.*-x86_64"
 
 // buildProgram returns a Pulumi inline program declaring the blueprint's
 // security group and EC2 instances in the account's default VPC.
@@ -22,11 +24,18 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
 		amiID := p.EC2.AMI
 		if amiID == "" {
-			param, err := ssm.LookupParameter(ctx, &ssm.LookupParameterArgs{Name: al2023SSMParam})
+			ami, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
+				MostRecent: pulumi.BoolRef(true),
+				Owners:     []string{"amazon"},
+				Filters: []ec2.GetAmiFilter{
+					{Name: "name", Values: []string{al2023NameFilter}},
+					{Name: "state", Values: []string{"available"}},
+				},
+			})
 			if err != nil {
 				return err
 			}
-			amiID = param.Value
+			amiID = ami.Id
 		}
 
 		vpc, err := ec2.LookupVpc(ctx, &ec2.LookupVpcArgs{Default: pulumi.BoolRef(true)})

@@ -13,6 +13,7 @@ import (
 type recordMocks struct {
 	mu    sync.Mutex
 	types []string
+	calls []string
 }
 
 func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
@@ -28,13 +29,16 @@ func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resourc
 }
 
 func (m *recordMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	m.mu.Lock()
+	m.calls = append(m.calls, args.Token)
+	m.mu.Unlock()
 	switch args.Token {
 	case "aws:ec2/getVpc:getVpc":
 		return resource.NewPropertyMapFromMap(map[string]any{"id": "vpc-123"}), nil
 	case "aws:ec2/getSubnets:getSubnets":
 		return resource.NewPropertyMapFromMap(map[string]any{"ids": []any{"subnet-123"}}), nil
-	case "aws:ssm/getParameter:getParameter":
-		return resource.NewPropertyMapFromMap(map[string]any{"value": "ami-0abc"}), nil
+	case "aws:ec2/getAmi:getAmi":
+		return resource.NewPropertyMapFromMap(map[string]any{"id": "ami-0abc"}), nil
 	}
 	return args.Args, nil
 }
@@ -70,5 +74,22 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	}
 	if got := count("aws:ec2/instance:Instance"); got != 2 {
 		t.Fatalf("instances = %d, want 2 (matches EC2.Count)", got)
+	}
+
+	called := func(tok string) bool {
+		for _, x := range m.calls {
+			if x == tok {
+				return true
+			}
+		}
+		return false
+	}
+	// AMI must resolve via ec2 getAmi (ec2:DescribeImages), not ssm getParameter
+	// (which needs an extra ssm:GetParameter permission users often lack).
+	if !called("aws:ec2/getAmi:getAmi") {
+		t.Fatalf("expected AMI resolution via ec2 getAmi; calls=%v", m.calls)
+	}
+	if called("aws:ssm/getParameter:getParameter") {
+		t.Fatalf("must not resolve AMI via ssm getParameter; calls=%v", m.calls)
 	}
 }
