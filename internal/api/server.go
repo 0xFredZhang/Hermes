@@ -73,6 +73,7 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	addProjectRoutes(mux, d)
+	addBlueprintRoutes(mux, d)
 
 	return d.Auth.Middleware(mux)
 }
