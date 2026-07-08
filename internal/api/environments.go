@@ -40,8 +40,23 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 		_ = d.Renderer.RenderPartial(w, "env_status", envViewData(env, jobs))
 	})
 	mux.HandleFunc("POST /environments/{id}/up", enqueueHandler(d, store.ActionUp))
-	mux.HandleFunc("POST /environments/{id}/retry", enqueueHandler(d, store.ActionUp))
+	mux.HandleFunc("POST /environments/{id}/retry", retryHandler(d))
 	mux.HandleFunc("POST /environments/{id}/destroy", enqueueHandler(d, store.ActionDestroy))
+}
+
+// retryHandler re-runs the action that actually failed, rather than always
+// running "up" — retrying a failed destroy must not re-create the resources
+// the user was tearing down.
+func retryHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		action := store.ActionUp
+		if jobs, err := d.Store.ListJobsByEnvironment(r.Context(), id); err == nil && len(jobs) > 0 {
+			action = jobs[0].Action // newest job (DESC) = the one that failed
+		}
+		_, _ = d.Orchestrator.Enqueue(r.Context(), id, action)
+		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	}
 }
 
 func enqueueHandler(d Deps, action string) http.HandlerFunc {

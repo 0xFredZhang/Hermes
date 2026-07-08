@@ -37,6 +37,24 @@ func TestEnvironmentUpEnqueuesJob(t *testing.T) {
 	}
 }
 
+func TestRetryReusesFailedAction(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	// A failed destroy is the most recent job for the environment.
+	jid, _ := d.Store.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionDestroy})
+	_ = d.Store.UpdateJobStatus(ctx, jid, store.JobFailed)
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/retry", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	if jobs[0].Action != store.ActionDestroy || jobs[0].Status != store.JobQueued {
+		t.Fatalf("retry enqueued %+v, want a queued destroy (reuse failed action)", jobs[0])
+	}
+}
+
 func TestEnvironmentStatusFragmentShowsConfirmButton(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	envID := seedEnv(t, d)
