@@ -24,6 +24,13 @@ import (
 )
 
 func main() {
+	// A transitive dependency (k8s.io/component-base/logs, pulled in via the AWS
+	// Pulumi provider) hijacks the standard logger in its init(): it redirects
+	// output to klog's writer and zeroes the flags, which silently swallows our
+	// log lines. Restore stderr + timestamps before we log anything.
+	log.SetOutput(os.Stderr)
+	log.SetFlags(log.LstdFlags)
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
