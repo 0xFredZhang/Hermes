@@ -12,23 +12,22 @@ import (
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
 )
 
-// al2023NameFilter matches the latest standard Amazon Linux 2023 x86_64 AMIs
-// (the "al2023-ami-2023.*" prefix excludes the "-minimal-" variants). Resolved
-// via ec2:DescribeImages, so the blueprint's cloud account needs no extra
-// ssm:GetParameter permission.
-const al2023NameFilter = "al2023-ami-2023.*-x86_64"
-
 // buildProgram returns a Pulumi inline program declaring the blueprint's
 // security group and EC2 instances in the account's default VPC.
 func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
 		amiID := p.EC2.AMI
 		if amiID == "" {
+			it, err := ec2.GetInstanceType(ctx, &ec2.GetInstanceTypeArgs{InstanceType: p.EC2.InstanceType})
+			if err != nil {
+				return err
+			}
+			arch := resolveArch(it.SupportedArchitectures)
 			ami, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
 				MostRecent: pulumi.BoolRef(true),
-				Owners:     []string{"amazon"},
+				Owners:     []string{ubuntuOwner},
 				Filters: []ec2.GetAmiFilter{
-					{Name: "name", Values: []string{al2023NameFilter}},
+					{Name: "name", Values: []string{ubuntuNameFilter(arch)}},
 					{Name: "state", Values: []string{"available"}},
 				},
 			})
@@ -107,4 +106,34 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		ctx.Export("public_dns", dns)
 		return nil
 	}
+}
+
+const ubuntuOwner = "099720109477" // Canonical (Ubuntu)
+
+// ubuntuNameFilter matches the latest Ubuntu 26.04 LTS server image for arch.
+// hvm-ssd* covers both the hvm-ssd and hvm-ssd-gp3 storage variants.
+func ubuntuNameFilter(arch string) string {
+	token := "amd64"
+	if arch == "arm64" {
+		token = "arm64"
+	}
+	return "ubuntu/images/hvm-ssd*/ubuntu-*-26.04-" + token + "-server-*"
+}
+
+// resolveArch collapses an instance type's SupportedArchitectures to one token,
+// preferring x86_64 when both are present.
+func resolveArch(supported []string) string {
+	hasArm, hasX86 := false, false
+	for _, a := range supported {
+		switch a {
+		case "arm64":
+			hasArm = true
+		case "x86_64":
+			hasX86 = true
+		}
+	}
+	if hasArm && !hasX86 {
+		return "arm64"
+	}
+	return "x86_64"
 }

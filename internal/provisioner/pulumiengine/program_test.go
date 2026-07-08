@@ -1,6 +1,7 @@
 package pulumiengine
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -39,6 +40,10 @@ func (m *recordMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, erro
 		return resource.NewPropertyMapFromMap(map[string]any{"ids": []any{"subnet-123"}}), nil
 	case "aws:ec2/getAmi:getAmi":
 		return resource.NewPropertyMapFromMap(map[string]any{"id": "ami-0abc"}), nil
+	case "aws:ec2/getInstanceType:getInstanceType":
+		return resource.NewPropertyMapFromMap(map[string]any{
+			"supportedArchitectures": []any{"x86_64"},
+		}), nil
 	}
 	return args.Args, nil
 }
@@ -91,5 +96,34 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	}
 	if called("aws:ssm/getParameter:getParameter") {
 		t.Fatalf("must not resolve AMI via ssm getParameter; calls=%v", m.calls)
+	}
+	if !called("aws:ec2/getInstanceType:getInstanceType") {
+		t.Fatalf("expected arch resolution via getInstanceType; calls=%v", m.calls)
+	}
+}
+
+func TestResolveArch(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want string
+	}{
+		{[]string{"x86_64"}, "x86_64"},
+		{[]string{"arm64"}, "arm64"},
+		{[]string{"x86_64", "arm64"}, "x86_64"},
+		{nil, "x86_64"},
+	}
+	for _, c := range cases {
+		if got := resolveArch(c.in); got != c.want {
+			t.Errorf("resolveArch(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestUbuntuNameFilterArchAware(t *testing.T) {
+	if got := ubuntuNameFilter("x86_64"); !strings.Contains(got, "26.04-amd64-server") {
+		t.Errorf("x86_64 filter = %q, want amd64 token", got)
+	}
+	if got := ubuntuNameFilter("arm64"); !strings.Contains(got, "26.04-arm64-server") {
+		t.Errorf("arm64 filter = %q, want arm64 token", got)
 	}
 }
