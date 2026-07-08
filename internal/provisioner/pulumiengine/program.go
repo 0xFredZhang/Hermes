@@ -96,8 +96,15 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 			if err != nil {
 				return err
 			}
+			eip, err := ec2.NewEip(ctx, fmt.Sprintf("hermes-eip-%d", i), &ec2.EipArgs{
+				Instance: inst.ID(),
+				Domain:   pulumi.String("vpc"),
+			})
+			if err != nil {
+				return err
+			}
 			ids = append(ids, inst.ID().ToStringOutput())
-			ips = append(ips, inst.PublicIp)
+			ips = append(ips, eip.PublicIp)
 			dns = append(dns, inst.PublicDns)
 		}
 

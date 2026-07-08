@@ -50,6 +50,7 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
+	// public_ips are now the instances' Elastic IPs (stable across reboots).
 	if res.Outputs["public_ips"] == nil {
 		t.Fatalf("expected public_ips output, got %+v", res.Outputs)
 	}

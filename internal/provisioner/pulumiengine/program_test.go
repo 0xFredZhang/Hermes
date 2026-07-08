@@ -26,6 +26,9 @@ func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resourc
 		outputs["publicIp"] = "1.2.3.4"
 		outputs["publicDns"] = "ec2-1-2-3-4.compute.amazonaws.com"
 	}
+	if args.TypeToken == "aws:ec2/eip:Eip" {
+		outputs["publicIp"] = "52.1.2.3"
+	}
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
 }
 
@@ -79,6 +82,9 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	}
 	if got := count("aws:ec2/instance:Instance"); got != 2 {
 		t.Fatalf("instances = %d, want 2 (matches EC2.Count)", got)
+	}
+	if got := count("aws:ec2/eip:Eip"); got != 2 {
+		t.Fatalf("eips = %d, want 2 (one per instance)", got)
 	}
 
 	called := func(tok string) bool {
