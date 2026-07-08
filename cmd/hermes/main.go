@@ -107,6 +107,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
-	orch.Stop() // wait for in-flight provisioning jobs to return
-	st.Close()
+	// Cancel workers: an in-flight provisioning job's context is cancelled, so it
+	// aborts and is reconciled to failed on the next startup (crash recovery).
+	// The DB is closed by the deferred st.Close() as main returns.
+	orch.Stop()
 }
