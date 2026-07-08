@@ -80,13 +80,42 @@ func TestInstanceTypesPaginatesAndSorts(t *testing.T) {
 				InstanceTypeOfferings: []types.InstanceTypeOffering{{InstanceType: types.InstanceType("c7g.large")}},
 			}, nil
 		},
+		itypes: func(in *ec2.DescribeInstanceTypesInput) (*ec2.DescribeInstanceTypesOutput, error) {
+			var out []types.InstanceTypeInfo
+			for _, it := range in.InstanceTypes {
+				switch string(it) {
+				case "t3.micro":
+					out = append(out, types.InstanceTypeInfo{
+						InstanceType: types.InstanceType("t3.micro"),
+						VCpuInfo:     &types.VCpuInfo{DefaultVCpus: aws.Int32(2)},
+						MemoryInfo:   &types.MemoryInfo{SizeInMiB: aws.Int64(1024)},
+					})
+				case "c7g.large":
+					out = append(out, types.InstanceTypeInfo{
+						InstanceType: types.InstanceType("c7g.large"),
+						VCpuInfo:     &types.VCpuInfo{DefaultVCpus: aws.Int32(2)},
+						MemoryInfo:   &types.MemoryInfo{SizeInMiB: aws.Int64(4096)},
+					})
+				}
+			}
+			return &ec2.DescribeInstanceTypesOutput{InstanceTypes: out}, nil
+		},
 	})
 	got, err := c.InstanceTypes(context.Background(), "AK", "sk", "ap-southeast-1")
 	if err != nil {
 		t.Fatalf("InstanceTypes: %v", err)
 	}
-	if len(got) != 2 || got[0] != "c7g.large" || got[1] != "t3.micro" {
-		t.Fatalf("InstanceTypes = %v, want [c7g.large t3.micro]", got)
+	want := []InstanceType{
+		{Name: "c7g.large", VCPUs: 2, MemoryMiB: 4096},
+		{Name: "t3.micro", VCPUs: 2, MemoryMiB: 1024},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("InstanceTypes len = %d, want %d (%+v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("InstanceTypes[%d] = %+v, want %+v", i, got[i], want[i])
+		}
 	}
 }
 

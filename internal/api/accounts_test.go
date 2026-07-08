@@ -39,6 +39,8 @@ func testDeps(t *testing.T) Deps {
 		Auth:      auth.New("pw", []byte("k")),
 		Renderer:  r,
 		Catalog:   fakeCatalog{},
+
+		DisableCatalogRefresh: true,
 	}
 }
 

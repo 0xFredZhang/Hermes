@@ -9,23 +9,31 @@
     <label>云账号
       <select name="cloud_account_id" required
               hx-get="/blueprints/regions" hx-trigger="change, load"
-              hx-target="#region-opts" hx-swap="innerHTML">
+              hx-target="#region-select" hx-swap="innerHTML">
         {{range .Accounts}}<option value="{{.ID}}">{{.Name}} ({{.AWSAccountID}})</option>{{end}}
       </select>
     </label>
     <label>Region
-      <input name="region" list="region-opts" value="ap-southeast-1" required
-             hx-get="/blueprints/instance-types" hx-trigger="change"
-             hx-target="#itype-opts" hx-swap="innerHTML"
-             hx-include="[name='cloud_account_id'],[name='region']">
-      <datalist id="region-opts"></datalist>
+      <input type="search" class="select-search" data-filter-select="#region-select"
+             placeholder="搜索地区或代码" oninput="filterSelectOptions(this)">
+      <select name="region" id="region-select" required
+              hx-get="/blueprints/instance-types" hx-trigger="change"
+              hx-target="#instance-type-select" hx-swap="innerHTML"
+              hx-include="[name='cloud_account_id'],[name='region']"
+              hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
+        <option value="ap-southeast-1">亚太地区（新加坡） · ap-southeast-1</option>
+      </select>
     </label>
     <label>实例规格
-      <input name="instance_type" list="itype-opts" value="t3.micro" required
-             hx-get="/blueprints/amis" hx-trigger="change"
-             hx-target="#ami-select" hx-swap="innerHTML"
-             hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type']">
-      <datalist id="itype-opts"></datalist>
+      <input type="search" class="select-search" data-filter-select="#instance-type-select"
+             placeholder="搜索规格 / CPU / 内存" oninput="filterSelectOptions(this)">
+      <select name="instance_type" id="instance-type-select" required
+              hx-get="/blueprints/amis" hx-trigger="change"
+              hx-target="#ami-select" hx-swap="innerHTML"
+              hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type']"
+              hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
+        <option value="t3.micro">t3.micro · 2C1G</option>
+      </select>
     </label>
     <label>数量 <input name="count" type="number" value="1" min="1" max="10" required></label>
     <label>AMI
@@ -45,4 +53,30 @@
   <thead><tr><th>名称</th><th>Region</th><th>规格×数量</th><th></th></tr></thead>
   <tbody id="blueprint-rows">{{template "blueprint_rows" .Blueprints}}</tbody>
 </table>
+<script>
+function filterSelectOptions(input) {
+  var select = document.querySelector(input.dataset.filterSelect);
+  if (!select) return;
+  var query = input.value.trim().toLowerCase();
+  var firstVisible = null;
+  var selectedVisible = false;
+  Array.prototype.forEach.call(select.options, function(option) {
+    var text = (option.textContent + " " + option.value).toLowerCase();
+    var visible = !query || text.indexOf(query) !== -1;
+    option.hidden = !visible;
+    if (visible && option.value && !firstVisible) firstVisible = option;
+    if (option.selected && visible) selectedVisible = true;
+  });
+  if (query && !selectedVisible && firstVisible) {
+    select.value = firstVisible.value;
+    select.dispatchEvent(new Event("change", {bubbles: true}));
+  }
+}
+
+document.addEventListener("htmx:afterSwap", function(event) {
+  if (!event.target || event.target.tagName !== "SELECT" || !event.target.id) return;
+  var input = document.querySelector('[data-filter-select="#' + event.target.id + '"]');
+  if (input) filterSelectOptions(input);
+});
+</script>
 {{end}}

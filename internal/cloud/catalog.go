@@ -60,11 +60,20 @@ func (c *Catalog) Regions(ctx context.Context, accessKey, secret string) ([]stri
 	return regions, nil
 }
 
-// InstanceTypes returns the instance types offered in region, sorted and deduped.
-func (c *Catalog) InstanceTypes(ctx context.Context, accessKey, secret, region string) ([]string, error) {
+// InstanceType is one selectable EC2 instance type with enough shape data to
+// help humans pick it in the blueprint form.
+type InstanceType struct {
+	Name      string
+	VCPUs     int32
+	MemoryMiB int64
+}
+
+// InstanceTypes returns the instance types offered in region, sorted and deduped,
+// with vCPU and memory details when AWS reports them.
+func (c *Catalog) InstanceTypes(ctx context.Context, accessKey, secret, region string) ([]InstanceType, error) {
 	client := c.NewClient(accessKey, secret, region)
 	seen := map[string]bool{}
-	var out []string
+	var names []string
 	var token *string
 	for {
 		page, err := client.DescribeInstanceTypeOfferings(ctx, &ec2.DescribeInstanceTypeOfferingsInput{
@@ -78,7 +87,7 @@ func (c *Catalog) InstanceTypes(ctx context.Context, accessKey, secret, region s
 			s := string(o.InstanceType)
 			if !seen[s] {
 				seen[s] = true
-				out = append(out, s)
+				names = append(names, s)
 			}
 		}
 		if page.NextToken == nil || *page.NextToken == "" {
@@ -86,8 +95,64 @@ func (c *Catalog) InstanceTypes(ctx context.Context, accessKey, secret, region s
 		}
 		token = page.NextToken
 	}
-	sort.Strings(out)
+	sort.Strings(names)
+	details, err := c.instanceTypeDetails(ctx, client, names)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]InstanceType, 0, len(names))
+	for _, name := range names {
+		if it, ok := details[name]; ok {
+			out = append(out, it)
+			continue
+		}
+		out = append(out, InstanceType{Name: name})
+	}
 	return out, nil
+}
+
+func (c *Catalog) instanceTypeDetails(ctx context.Context, client EC2API, names []string) (map[string]InstanceType, error) {
+	const chunkSize = 100
+	out := make(map[string]InstanceType, len(names))
+	for start := 0; start < len(names); start += chunkSize {
+		end := start + chunkSize
+		if end > len(names) {
+			end = len(names)
+		}
+		inputTypes := make([]types.InstanceType, 0, end-start)
+		for _, name := range names[start:end] {
+			inputTypes = append(inputTypes, types.InstanceType(name))
+		}
+		page, err := client.DescribeInstanceTypes(ctx, &ec2.DescribeInstanceTypesInput{
+			InstanceTypes: inputTypes,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, info := range page.InstanceTypes {
+			name := string(info.InstanceType)
+			out[name] = InstanceType{
+				Name:      name,
+				VCPUs:     vcpusOf(info),
+				MemoryMiB: memoryMiBOf(info),
+			}
+		}
+	}
+	return out, nil
+}
+
+func vcpusOf(info types.InstanceTypeInfo) int32 {
+	if info.VCpuInfo == nil {
+		return 0
+	}
+	return aws.ToInt32(info.VCpuInfo.DefaultVCpus)
+}
+
+func memoryMiBOf(info types.InstanceTypeInfo) int64 {
+	if info.MemoryInfo == nil {
+		return 0
+	}
+	return aws.ToInt64(info.MemoryInfo.SizeInMiB)
 }
 
 // Image is one selectable OS image resolved for a region+architecture.

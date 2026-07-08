@@ -85,6 +85,7 @@ func main() {
 		Broker:       broker,
 		Catalog:      cloud.NewCatalog(),
 	}
+	go api.WarmCatalogCache(context.Background(), deps)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

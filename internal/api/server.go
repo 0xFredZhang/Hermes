@@ -22,6 +22,10 @@ type Deps struct {
 	Orchestrator *orchestrator.Orchestrator
 	Broker       *orchestrator.Broker
 	Catalog      CatalogAPI
+
+	// DisableCatalogRefresh is used by handler tests to avoid background
+	// goroutines making fake catalog calls after the response returns.
+	DisableCatalogRefresh bool
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -103,7 +107,8 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 	}
 	acc.AWSAccountID = id.AccountID
 	acc.ARN = id.ARN
-	if _, err := d.Store.CreateCloudAccount(r.Context(), acc); err != nil {
+	accountID, err := d.Store.CreateCloudAccount(r.Context(), acc)
+	if err != nil {
 		if errors.Is(err, store.ErrDuplicateAccount) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
@@ -113,6 +118,8 @@ func handleCreateAccount(w http.ResponseWriter, r *http.Request, d Deps) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	acc.ID = accountID
+	refreshCatalogCacheAsync(d, acc)
 	writeRows(w, r.Context(), d)
 }
 
