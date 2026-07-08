@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/0xFredZhang/Hermes/internal/orchestrator"
@@ -117,5 +118,26 @@ func TestDeployCreatesEnvironmentAndPreviewJob(t *testing.T) {
 	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envs[0].ID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionPreview || jobs[0].Status != store.JobQueued {
 		t.Fatalf("preview job not enqueued: %+v", jobs)
+	}
+}
+
+func TestBlueprintFormHasLiveControls(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	seedProjectAccount(t, d)
+	body := authedGet(t, d, "/blueprints").Body.String()
+	for _, want := range []string{
+		`hx-get="/blueprints/regions"`,
+		`hx-trigger="change, load"`,
+		`list="region-opts"`,
+		`<datalist id="region-opts">`,
+		`hx-get="/blueprints/instance-types"`,
+		`list="itype-opts"`,
+		`hx-get="/blueprints/amis"`,
+		`<select name="ami" id="ami-select">`,
+		`自动:最新 Ubuntu 26.04 LTS`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("blueprint form missing %q", want)
+		}
 	}
 }

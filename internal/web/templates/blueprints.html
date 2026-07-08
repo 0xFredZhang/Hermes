@@ -6,11 +6,33 @@
     <legend>新建蓝图(安全组 + EC2)</legend>
     <label>名称 <input name="name" required></label>
     <label>项目 <select name="project_id" required>{{range .Projects}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
-    <label>云账号 <select name="cloud_account_id" required>{{range .Accounts}}<option value="{{.ID}}">{{.Name}} ({{.AWSAccountID}})</option>{{end}}</select></label>
-    <label>Region <input name="region" value="ap-southeast-1" required></label>
-    <label>实例规格 <input name="instance_type" value="t3.micro" required></label>
+    <label>云账号
+      <select name="cloud_account_id" required
+              hx-get="/blueprints/regions" hx-trigger="change, load"
+              hx-target="#region-opts" hx-swap="innerHTML">
+        {{range .Accounts}}<option value="{{.ID}}">{{.Name}} ({{.AWSAccountID}})</option>{{end}}
+      </select>
+    </label>
+    <label>Region
+      <input name="region" list="region-opts" value="ap-southeast-1" required
+             hx-get="/blueprints/instance-types" hx-trigger="change"
+             hx-target="#itype-opts" hx-swap="innerHTML"
+             hx-include="[name='cloud_account_id'],[name='region']">
+      <datalist id="region-opts"></datalist>
+    </label>
+    <label>实例规格
+      <input name="instance_type" list="itype-opts" value="t3.micro" required
+             hx-get="/blueprints/amis" hx-trigger="change"
+             hx-target="#ami-select" hx-swap="innerHTML"
+             hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type']">
+      <datalist id="itype-opts"></datalist>
+    </label>
     <label>数量 <input name="count" type="number" value="1" min="1" max="10" required></label>
-    <label>AMI(留空=最新 AL2023) <input name="ami" placeholder="可选"></label>
+    <label>AMI
+      <select name="ami" id="ami-select">
+        <option value="">自动:最新 Ubuntu 26.04 LTS</option>
+      </select>
+    </label>
     <label>系统盘 GB <input name="root_volume_gb" type="number" value="8" min="8" required></label>
     <label>Key Pair(可选) <input name="key_name" placeholder="可选"></label>
     <label>入站端口 <input name="ingress_port" type="number" value="22" required></label>
