@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 	"github.com/0xFredZhang/Hermes/internal/cloud"
 	"github.com/0xFredZhang/Hermes/internal/config"
 	"github.com/0xFredZhang/Hermes/internal/crypto"
+	"github.com/0xFredZhang/Hermes/internal/orchestrator"
+	"github.com/0xFredZhang/Hermes/internal/provisioner/pulumiengine"
 	"github.com/0xFredZhang/Hermes/internal/store"
 	"github.com/0xFredZhang/Hermes/internal/web"
 )
@@ -25,7 +29,6 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	// Derive separate keys for AES-GCM and session HMAC
 	aesKey, err := crypto.DeriveKey(cfg.MasterKey, "hermes:aes-gcm:v1")
 	if err != nil {
 		log.Fatalf("derive aes key: %v", err)
@@ -34,6 +37,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("derive session key: %v", err)
 	}
+	ppKey, err := crypto.DeriveKey(cfg.MasterKey, "hermes:pulumi-passphrase:v1")
+	if err != nil {
+		log.Fatalf("derive pulumi passphrase: %v", err)
+	}
+	passphrase := base64.StdEncoding.EncodeToString(ppKey)
 
 	cipher, err := crypto.NewCipher(aesKey)
 	if err != nil {
@@ -49,46 +57,56 @@ func main() {
 		log.Fatalf("renderer: %v", err)
 	}
 
-	deps := api.Deps{
-		Store:     st,
-		Validator: cloud.NewValidator(),
-		Auth:      auth.New(cfg.LoginPassword, sessionKey),
-		Renderer:  renderer,
+	// Ensure the local Pulumi state directory exists for the file:// backend.
+	if dir, ok := strings.CutPrefix(cfg.PulumiBackend, "file://"); ok {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Fatalf("pulumi state dir: %v", err)
+		}
 	}
 
-	// Setup HTTP server with timeouts
+	broker := orchestrator.NewBroker()
+	prov := pulumiengine.New(cfg.PulumiProject, cfg.PulumiBackend, passphrase)
+	orch := orchestrator.New(st, prov, broker, cfg.Workers)
+	orch.Start(context.Background())
+
+	deps := api.Deps{
+		Store:        st,
+		Validator:    cloud.NewValidator(),
+		Auth:         auth.New(cfg.LoginPassword, sessionKey),
+		Renderer:     renderer,
+		Orchestrator: orch,
+		Broker:       broker,
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           api.NewRouter(deps),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// No global WriteTimeout: SSE streams are long-lived. Per-request
+		// deadlines are managed where needed (login/forms are quick anyway).
+		IdleTimeout: 60 * time.Second,
 	}
 
-	// Setup graceful shutdown on SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("hermes listening on %s", cfg.Addr)
+	log.Printf("hermes listening on %s (workers=%d, backend=%s)", cfg.Addr, cfg.Workers, cfg.PulumiBackend)
 
-	// Run server in a goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("server error: %v", err)
 		}
 	}()
 
-	// Wait for shutdown signal
 	<-ctx.Done()
 	log.Print("shutting down...")
 
-	// Graceful shutdown with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
-
+	orch.Stop() // wait for in-flight provisioning jobs to return
 	st.Close()
 }

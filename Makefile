@@ -11,7 +11,7 @@ BINARY := bin/hermes
 PKG    := ./cmd/hermes
 
 .DEFAULT_GOAL := help
-.PHONY: run build test vet fmt tidy gen-key env clean help
+.PHONY: run build test vet fmt tidy gen-key env clean help setup-pulumi test-integration
 
 run: ## Load .env and start the server locally
 	go run $(PKG)
@@ -44,6 +44,13 @@ env: ## Create .env from .env.example (fills a random master key)
 
 clean: ## Remove build artifacts
 	rm -rf bin
+
+setup-pulumi: ## Install the Pulumi AWS provider plugin (requires pulumi CLI on PATH)
+	@command -v pulumi >/dev/null || { echo "pulumi CLI not found — install: https://www.pulumi.com/docs/install/"; exit 1; }
+	pulumi plugin install resource aws
+
+test-integration: ## Run the real-AWS integration test (needs pulumi + AWS creds in env)
+	go test -tags integration ./internal/provisioner/pulumiengine/ -run TestIntegration -v
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort \

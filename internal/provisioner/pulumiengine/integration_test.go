@@ -1,0 +1,57 @@
+//go:build integration
+
+package pulumiengine
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/0xFredZhang/Hermes/internal/provisioner"
+)
+
+// TestIntegrationUpDestroy runs a real up→destroy against AWS.
+// Requires: pulumi CLI + AWS plugin installed, and AWS creds in the environment.
+// Run: make test-integration   (or)
+//
+//	go test -tags integration ./internal/provisioner/pulumiengine/ -run TestIntegration -v
+func TestIntegrationUpDestroy(t *testing.T) {
+	ak, sk := os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if ak == "" || sk == "" {
+		t.Skip("set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY to run the integration test")
+	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "ap-southeast-1"
+	}
+
+	p := New("hermes-it", "file://"+t.TempDir(), "integration-passphrase")
+	spec := provisioner.Spec{
+		StackName: "it-stack",
+		Region:    region,
+		Params: provisioner.BlueprintParams{
+			Region: region,
+			SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+				{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+			}},
+			EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		},
+		Creds: provisioner.AWSCreds{AccessKeyID: ak, SecretAccessKey: sk},
+	}
+	ctx := context.Background()
+
+	// Always attempt to clean up, even if assertions fail.
+	t.Cleanup(func() {
+		if err := p.Destroy(ctx, spec, os.Stderr); err != nil {
+			t.Errorf("Destroy (cleanup): %v", err)
+		}
+	})
+
+	res, err := p.Up(ctx, spec, os.Stderr)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if res.Outputs["public_ips"] == nil {
+		t.Fatalf("expected public_ips output, got %+v", res.Outputs)
+	}
+}
