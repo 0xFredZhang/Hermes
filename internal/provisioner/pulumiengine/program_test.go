@@ -1,0 +1,74 @@
+package pulumiengine
+
+import (
+	"sync"
+	"testing"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+	"github.com/0xFredZhang/Hermes/internal/provisioner"
+)
+
+type recordMocks struct {
+	mu    sync.Mutex
+	types []string
+}
+
+func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
+	m.mu.Lock()
+	m.types = append(m.types, args.TypeToken)
+	m.mu.Unlock()
+	outputs := args.Inputs.Mappable()
+	if args.TypeToken == "aws:ec2/instance:Instance" {
+		outputs["publicIp"] = "1.2.3.4"
+		outputs["publicDns"] = "ec2-1-2-3-4.compute.amazonaws.com"
+	}
+	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
+}
+
+func (m *recordMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	switch args.Token {
+	case "aws:ec2/getVpc:getVpc":
+		return resource.NewPropertyMapFromMap(map[string]any{"id": "vpc-123"}), nil
+	case "aws:ec2/getSubnets:getSubnets":
+		return resource.NewPropertyMapFromMap(map[string]any{"ids": []any{"subnet-123"}}), nil
+	case "aws:ssm/getParameter:getParameter":
+		return resource.NewPropertyMapFromMap(map[string]any{"value": "ami-0abc"}), nil
+	}
+	return args.Args, nil
+}
+
+func (m *recordMocks) MethodCall(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	return args.Args, nil
+}
+
+func TestBuildProgramDeclaresResources(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 2, RootVolumeGB: 8},
+	}
+	m := &recordMocks{}
+	err := pulumi.RunErr(buildProgram(params), pulumi.WithMocks("hermes", "test", m))
+	if err != nil {
+		t.Fatalf("RunErr: %v", err)
+	}
+	count := func(tok string) int {
+		n := 0
+		for _, x := range m.types {
+			if x == tok {
+				n++
+			}
+		}
+		return n
+	}
+	if got := count("aws:ec2/securityGroup:SecurityGroup"); got != 1 {
+		t.Fatalf("security groups = %d, want 1", got)
+	}
+	if got := count("aws:ec2/instance:Instance"); got != 2 {
+		t.Fatalf("instances = %d, want 2 (matches EC2.Count)", got)
+	}
+}
