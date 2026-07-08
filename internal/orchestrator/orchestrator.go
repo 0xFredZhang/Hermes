@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
@@ -74,6 +75,12 @@ func (o *Orchestrator) Enqueue(ctx context.Context, envID int64, action string) 
 	}
 	jobID, err := o.store.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: action})
 	if err != nil {
+		// The partial unique index (migration 0004) is the atomic backstop for
+		// the check-then-act race above: a concurrent Enqueue that slips past
+		// HasActiveJob fails here on the unique constraint.
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, ErrEnvironmentBusy
+		}
 		return 0, err
 	}
 	o.queue <- jobID
@@ -82,7 +89,21 @@ func (o *Orchestrator) Enqueue(ctx context.Context, envID int64, action string) 
 
 func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 	logs := o.broker.Writer(jobID)
-	defer o.broker.Close(jobID)
+	var envID int64
+
+	// Registered first, so it runs LAST: flush the trailing partial line, then
+	// persist the complete log buffer to the DB (fixes losing the last line).
+	defer func() {
+		o.broker.Close(jobID)
+		o.persistLogs(ctx, jobID)
+	}()
+	// Registered second, so it runs FIRST: a panic in the Pulumi path must fail
+	// only this job, never crash the whole server (and every other in-flight job).
+	defer func() {
+		if r := recover(); r != nil {
+			o.fail(ctx, jobID, envID, logs, fmt.Errorf("panic: %v", r))
+		}
+	}()
 
 	job, err := o.store.GetJob(ctx, jobID)
 	if err != nil {
@@ -93,6 +114,7 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 		o.fail(ctx, jobID, 0, logs, err)
 		return
 	}
+	envID = env.ID
 	acct, err := o.store.GetCloudAccount(ctx, env.CloudAccountID) // decrypts secret
 	if err != nil {
 		o.fail(ctx, jobID, env.ID, logs, err)
@@ -137,7 +159,6 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvDestroyed)
 	}
 
-	o.persistLogs(ctx, jobID)
 	_ = o.store.UpdateJobStatus(ctx, jobID, store.JobSucceeded)
 }
 
@@ -154,7 +175,7 @@ func transientStatus(action string) string {
 
 func (o *Orchestrator) fail(ctx context.Context, jobID, envID int64, logs io.Writer, cause error) {
 	fmt.Fprintf(logs, "ERROR: %v\n", cause)
-	o.persistLogs(ctx, jobID)
+	// Log persistence is handled by the deferred flush-and-persist in run().
 	_ = o.store.SetJobError(ctx, jobID, cause.Error())
 	_ = o.store.UpdateJobStatus(ctx, jobID, store.JobFailed)
 	if envID != 0 {

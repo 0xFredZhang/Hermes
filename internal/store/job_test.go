@@ -68,13 +68,22 @@ func TestJobLifecycleAndActiveGuard(t *testing.T) {
 func TestListOrphanJobs(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	envID := seedEnvironment(t, s)
+	env1 := seedEnvironment(t, s)
+	// A second environment reusing env1's blueprint + account (the one-active-job
+	// index forbids two active jobs on the same environment).
+	e1, _ := s.GetEnvironment(ctx, env1)
+	env2, _ := s.CreateEnvironment(ctx, Environment{
+		BlueprintID: e1.BlueprintID, CloudAccountID: e1.CloudAccountID,
+		Name: "e2", PulumiStack: "e-2", Region: "ap-southeast-1",
+	})
 
-	q, _ := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp})
-	r, _ := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp})
+	// env1: a completed job (excluded) plus a queued orphan.
+	doneJob, _ := s.CreateJob(ctx, Job{EnvironmentID: env1, Action: ActionUp})
+	_ = s.UpdateJobStatus(ctx, doneJob, JobSucceeded)
+	q, _ := s.CreateJob(ctx, Job{EnvironmentID: env1, Action: ActionUp})
+	// env2: a running orphan.
+	r, _ := s.CreateJob(ctx, Job{EnvironmentID: env2, Action: ActionUp})
 	_ = s.UpdateJobStatus(ctx, r, JobRunning)
-	done, _ := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp})
-	_ = s.UpdateJobStatus(ctx, done, JobSucceeded)
 
 	orphans, err := s.ListOrphanJobs(ctx)
 	if err != nil {
@@ -82,5 +91,25 @@ func TestListOrphanJobs(t *testing.T) {
 	}
 	if len(orphans) != 2 {
 		t.Fatalf("orphans = %d, want 2 (queued %d + running %d)", len(orphans), q, r)
+	}
+}
+
+func TestOneActiveJobPerEnv(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+
+	if _, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionPreview}); err != nil {
+		t.Fatalf("first job: %v", err)
+	}
+	// A second active job for the same environment must violate the index.
+	if _, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp}); err == nil {
+		t.Fatal("expected unique-constraint error for a second active job on the same env")
+	}
+	// Once the first job is terminal, a new job is allowed again.
+	jobs, _ := s.ListJobsByEnvironment(ctx, envID)
+	_ = s.UpdateJobStatus(ctx, jobs[0].ID, JobSucceeded)
+	if _, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp}); err != nil {
+		t.Fatalf("job after terminal should be allowed: %v", err)
 	}
 }
