@@ -21,6 +21,7 @@ type Deps struct {
 	Renderer     *web.Renderer
 	Orchestrator *orchestrator.Orchestrator
 	Broker       *orchestrator.Broker
+	Catalog      CatalogAPI
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -74,6 +75,7 @@ func NewRouter(d Deps) http.Handler {
 
 	addProjectRoutes(mux, d)
 	addBlueprintRoutes(mux, d)
+	addMetadataRoutes(mux, d)
 	addEnvironmentRoutes(mux, d)
 	addJobRoutes(mux, d)
 

@@ -83,6 +83,7 @@ func main() {
 		Renderer:     renderer,
 		Orchestrator: orch,
 		Broker:       broker,
+		Catalog:      cloud.NewCatalog(),
 	}
 
 	srv := &http.Server{

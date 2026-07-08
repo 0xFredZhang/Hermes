@@ -38,6 +38,7 @@ func testDeps(t *testing.T) Deps {
 		Validator: v,
 		Auth:      auth.New("pw", []byte("k")),
 		Renderer:  r,
+		Catalog:   fakeCatalog{},
 	}
 }
 
