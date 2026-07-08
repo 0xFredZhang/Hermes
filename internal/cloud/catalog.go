@@ -2,8 +2,10 @@ package cloud
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -86,4 +88,114 @@ func (c *Catalog) InstanceTypes(ctx context.Context, accessKey, secret, region s
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// Image is one selectable OS image resolved for a region+architecture.
+type Image struct {
+	ID      string // ami-...
+	Name    string // friendly, e.g. "Ubuntu 26.04 LTS"
+	Default bool   // the form pre-selects the default image
+}
+
+const canonicalOwner = "099720109477" // Canonical (Ubuntu) AWS account
+
+// osSpec is one entry in the curated OS catalog. pattern has a single %s for the
+// architecture token produced by archToken.
+type osSpec struct {
+	name      string
+	owner     string
+	pattern   string
+	archToken func(arch string) string
+	isDefault bool
+}
+
+func ubuntuArchToken(arch string) string {
+	if arch == "arm64" {
+		return "arm64"
+	}
+	return "amd64"
+}
+
+func al2023ArchToken(arch string) string {
+	if arch == "arm64" {
+		return "arm64"
+	}
+	return "x86_64"
+}
+
+// osCatalog is the curated image list. Add a distro by adding an entry.
+// hvm-ssd* matches both the hvm-ssd and hvm-ssd-gp3 Ubuntu storage variants.
+var osCatalog = []osSpec{
+	{name: "Ubuntu 26.04 LTS", owner: canonicalOwner, pattern: "ubuntu/images/hvm-ssd*/ubuntu-*-26.04-%s-server-*", archToken: ubuntuArchToken, isDefault: true},
+	{name: "Ubuntu 24.04 LTS", owner: canonicalOwner, pattern: "ubuntu/images/hvm-ssd*/ubuntu-*-24.04-%s-server-*", archToken: ubuntuArchToken},
+	{name: "Amazon Linux 2023", owner: "amazon", pattern: "al2023-ami-2023.*-%s", archToken: al2023ArchToken},
+}
+
+// Architecture reports the CPU architecture ("x86_64" or "arm64") of instanceType,
+// defaulting to x86_64 when the type reports both or is unknown.
+func (c *Catalog) Architecture(ctx context.Context, accessKey, secret, region, instanceType string) (string, error) {
+	out, err := c.NewClient(accessKey, secret, region).DescribeInstanceTypes(ctx, &ec2.DescribeInstanceTypesInput{
+		InstanceTypes: []types.InstanceType{types.InstanceType(instanceType)},
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(out.InstanceTypes) == 0 || out.InstanceTypes[0].ProcessorInfo == nil {
+		return "x86_64", nil
+	}
+	return archOf(out.InstanceTypes[0].ProcessorInfo.SupportedArchitectures), nil
+}
+
+// archOf collapses AWS's SupportedArchitectures to one token, preferring x86_64
+// when a type supports both.
+func archOf(supported []types.ArchitectureType) string {
+	hasArm, hasX86 := false, false
+	for _, a := range supported {
+		switch a {
+		case types.ArchitectureTypeArm64:
+			hasArm = true
+		case types.ArchitectureTypeX8664:
+			hasX86 = true
+		}
+	}
+	if hasArm && !hasX86 {
+		return "arm64"
+	}
+	return "x86_64"
+}
+
+// Images resolves the curated OS catalog to the newest AMI per entry for the
+// given region and architecture. Entries that resolve to no image are skipped.
+func (c *Catalog) Images(ctx context.Context, accessKey, secret, region, arch string) ([]Image, error) {
+	client := c.NewClient(accessKey, secret, region)
+	var out []Image
+	for _, spec := range osCatalog {
+		name := fmt.Sprintf(spec.pattern, spec.archToken(arch))
+		res, err := client.DescribeImages(ctx, &ec2.DescribeImagesInput{
+			Owners: []string{spec.owner},
+			Filters: []types.Filter{
+				{Name: aws.String("name"), Values: []string{name}},
+				{Name: aws.String("state"), Values: []string{"available"}},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if newest := newestImage(res.Images); newest != nil {
+			out = append(out, Image{ID: aws.ToString(newest.ImageId), Name: spec.name, Default: spec.isDefault})
+		}
+	}
+	return out, nil
+}
+
+// newestImage returns the image with the latest CreationDate (ISO-8601 sorts
+// lexicographically), or nil for an empty slice.
+func newestImage(imgs []types.Image) *types.Image {
+	var best *types.Image
+	for i := range imgs {
+		if best == nil || aws.ToString(imgs[i].CreationDate) > aws.ToString(best.CreationDate) {
+			best = &imgs[i]
+		}
+	}
+	return best
 }

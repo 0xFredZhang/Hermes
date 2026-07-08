@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -86,5 +87,65 @@ func TestInstanceTypesPaginatesAndSorts(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "c7g.large" || got[1] != "t3.micro" {
 		t.Fatalf("InstanceTypes = %v, want [c7g.large t3.micro]", got)
+	}
+}
+
+func TestArchitectureDetectsArm(t *testing.T) {
+	c := catalogWith(&fakeEC2{
+		itypes: func(*ec2.DescribeInstanceTypesInput) (*ec2.DescribeInstanceTypesOutput, error) {
+			return &ec2.DescribeInstanceTypesOutput{InstanceTypes: []types.InstanceTypeInfo{
+				{ProcessorInfo: &types.ProcessorInfo{SupportedArchitectures: []types.ArchitectureType{types.ArchitectureTypeArm64}}},
+			}}, nil
+		},
+	})
+	arch, err := c.Architecture(context.Background(), "AK", "sk", "ap-southeast-1", "t4g.micro")
+	if err != nil {
+		t.Fatalf("Architecture: %v", err)
+	}
+	if arch != "arm64" {
+		t.Fatalf("arch = %q, want arm64", arch)
+	}
+}
+
+func TestArchitectureDefaultsX86(t *testing.T) {
+	arch, _ := catalogWith(&fakeEC2{}).Architecture(context.Background(), "AK", "sk", "r", "t3.micro")
+	if arch != "x86_64" {
+		t.Fatalf("arch = %q, want x86_64 (empty result → default)", arch)
+	}
+}
+
+func TestImagesResolvesCatalogArchAwareWithDefault(t *testing.T) {
+	var nameFilters []string
+	c := catalogWith(&fakeEC2{
+		images: func(in *ec2.DescribeImagesInput) (*ec2.DescribeImagesOutput, error) {
+			for _, fl := range in.Filters {
+				if aws.ToString(fl.Name) == "name" {
+					nameFilters = append(nameFilters, fl.Values[0])
+				}
+			}
+			return &ec2.DescribeImagesOutput{Images: []types.Image{
+				{ImageId: aws.String("ami-old"), CreationDate: aws.String("2024-01-01T00:00:00Z")},
+				{ImageId: aws.String("ami-new"), CreationDate: aws.String("2026-05-01T00:00:00Z")},
+			}}, nil
+		},
+	})
+	imgs, err := c.Images(context.Background(), "AK", "sk", "ap-southeast-1", "arm64")
+	if err != nil {
+		t.Fatalf("Images: %v", err)
+	}
+	if len(imgs) != 3 {
+		t.Fatalf("want 3 catalog images, got %d (%+v)", len(imgs), imgs)
+	}
+	if imgs[0].Name != "Ubuntu 26.04 LTS" || !imgs[0].Default {
+		t.Fatalf("first image must be default Ubuntu 26.04 LTS, got %+v", imgs[0])
+	}
+	if imgs[0].ID != "ami-new" {
+		t.Fatalf("must pick newest by CreationDate, got %q", imgs[0].ID)
+	}
+	if !strings.Contains(nameFilters[0], "26.04-arm64-server") {
+		t.Fatalf("ubuntu 26.04 filter must use arm64 token, got %q", nameFilters[0])
+	}
+	if !strings.Contains(nameFilters[2], "al2023-ami-2023.*-arm64") {
+		t.Fatalf("al2023 filter must use arm64 token, got %q", nameFilters[2])
 	}
 }
