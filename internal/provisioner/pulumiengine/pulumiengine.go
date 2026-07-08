@@ -84,6 +84,14 @@ func (p *Provisioner) Destroy(ctx context.Context, spec provisioner.Spec, logs i
 	if err != nil {
 		return err
 	}
-	_, err = st.Destroy(ctx, optdestroy.ProgressStreams(logs))
-	return err
+	if _, err := st.Destroy(ctx, optdestroy.ProgressStreams(logs)); err != nil {
+		return err
+	}
+	// Resources are gone; remove the now-empty stack from the backend so the
+	// state directory doesn't accumulate empty shells. Best-effort: the destroy
+	// already succeeded, so a cleanup failure must not be reported as a failure.
+	if err := st.Workspace().RemoveStack(ctx, st.Name()); err != nil {
+		fmt.Fprintf(logs, "note: could not remove empty stack %q from backend: %v\n", st.Name(), err)
+	}
+	return nil
 }

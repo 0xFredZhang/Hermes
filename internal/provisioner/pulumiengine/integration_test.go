@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
 )
 
@@ -40,12 +42,9 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Always attempt to clean up, even if assertions fail.
-	t.Cleanup(func() {
-		if err := p.Destroy(ctx, spec, os.Stderr); err != nil {
-			t.Errorf("Destroy (cleanup): %v", err)
-		}
-	})
+	// Safety net: tear down even if an assertion fails before the explicit
+	// destroy below. A second destroy on an already-removed stack is harmless.
+	t.Cleanup(func() { _ = p.Destroy(ctx, spec, os.Stderr) })
 
 	res, err := p.Up(ctx, spec, os.Stderr)
 	if err != nil {
@@ -53,5 +52,15 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	}
 	if res.Outputs["public_ips"] == nil {
 		t.Fatalf("expected public_ips output, got %+v", res.Outputs)
+	}
+
+	// Destroy tears down the resources AND removes the now-empty stack.
+	if err := p.Destroy(ctx, spec, os.Stderr); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+	// The stack should no longer exist in the backend: selecting it must fail.
+	if _, err := auto.SelectStackInlineSource(ctx, spec.StackName, p.project,
+		buildProgram(spec.Params), auto.EnvVars(p.envVars(spec))); err == nil {
+		t.Errorf("stack %q still present after Destroy; RemoveStack did not run", spec.StackName)
 	}
 }
