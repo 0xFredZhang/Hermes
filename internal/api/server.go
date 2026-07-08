@@ -9,15 +9,18 @@ import (
 
 	"github.com/0xFredZhang/Hermes/internal/auth"
 	"github.com/0xFredZhang/Hermes/internal/cloud"
+	"github.com/0xFredZhang/Hermes/internal/orchestrator"
 	"github.com/0xFredZhang/Hermes/internal/store"
 	"github.com/0xFredZhang/Hermes/internal/web"
 )
 
 type Deps struct {
-	Store     *store.Store
-	Validator *cloud.Validator
-	Auth      *auth.Authenticator
-	Renderer  *web.Renderer
+	Store        *store.Store
+	Validator    *cloud.Validator
+	Auth         *auth.Authenticator
+	Renderer     *web.Renderer
+	Orchestrator *orchestrator.Orchestrator
+	Broker       *orchestrator.Broker
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -68,6 +71,8 @@ func NewRouter(d Deps) http.Handler {
 		}
 		writeRows(w, r.Context(), d)
 	})
+
+	addProjectRoutes(mux, d)
 
 	return d.Auth.Middleware(mux)
 }
