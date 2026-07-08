@@ -45,3 +45,45 @@ func TestLoad(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadProvisioningDefaults(t *testing.T) {
+	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.PulumiProject != "hermes" {
+		t.Fatalf("PulumiProject = %q, want hermes", cfg.PulumiProject)
+	}
+	if cfg.Workers != 2 {
+		t.Fatalf("Workers = %d, want 2", cfg.Workers)
+	}
+	if len(cfg.PulumiBackend) < 7 || cfg.PulumiBackend[:7] != "file://" {
+		t.Fatalf("PulumiBackend = %q, want file:// default", cfg.PulumiBackend)
+	}
+}
+
+func TestLoadWorkersOverride(t *testing.T) {
+	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+	t.Setenv("HERMES_WORKERS", "4")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Workers != 4 {
+		t.Fatalf("Workers = %d, want 4", cfg.Workers)
+	}
+}
+
+func TestLoadRejectsBadWorkers(t *testing.T) {
+	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+	t.Setenv("HERMES_WORKERS", "zero")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for non-numeric HERMES_WORKERS")
+	}
+}
