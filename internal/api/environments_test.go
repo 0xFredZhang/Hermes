@@ -170,6 +170,12 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 		Username:      "admin",
 		Password:      "do-not-leak-in-status",
 	})
+	_ = d.Store.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: envID,
+		Kind:          store.SecretRedisAuth,
+		Username:      "default",
+		Password:      "do-not-leak-redis-token",
+	})
 
 	rec := authedGet(t, d, "/environments/"+itoa(envID)+"/status")
 	body := rec.Body.String()
@@ -184,6 +190,7 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 		"redis.example",
 		"6379",
 		`/environments/` + itoa(envID) + `/rds-credentials`,
+		`/environments/` + itoa(envID) + `/redis-credentials`,
 		"显示凭据",
 	} {
 		if !strings.Contains(body, want) {
@@ -192,6 +199,9 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 	}
 	if strings.Contains(body, "do-not-leak-in-status") {
 		t.Fatalf("status fragment must not expose generated DB secret: %s", body)
+	}
+	if strings.Contains(body, "do-not-leak-redis-token") {
+		t.Fatalf("status fragment must not expose generated Redis token: %s", body)
 	}
 	if strings.Contains(body, "password") || strings.Contains(body, "密码") {
 		t.Fatalf("status fragment must not expose generated DB password: %s", body)
@@ -225,6 +235,39 @@ func TestRevealRDSCredentialsReturnsStoredSecretNoStore(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{"admin", "stored-rds-secret", "db.example", "3306"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("credential reveal missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestRevealRedisCredentialsReturnsStoredSecretNoStore(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvUp)
+	if err := d.Store.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: envID,
+		Kind:          store.SecretRedisAuth,
+		Username:      "default",
+		Password:      "stored-redis-token",
+		Metadata: map[string]any{
+			"primary_endpoint": "redis.example",
+			"port":             float64(6379),
+		},
+	}); err != nil {
+		t.Fatalf("UpsertEnvironmentSecret: %v", err)
+	}
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/redis-credentials", url.Values{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"default", "stored-redis-token", "redis.example", "6379"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("credential reveal missing %q: %s", want, body)
 		}

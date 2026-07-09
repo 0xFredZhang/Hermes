@@ -44,6 +44,7 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("POST /environments/{id}/retry", retryHandler(d))
 	mux.HandleFunc("POST /environments/{id}/refresh", enqueueHandler(d, store.ActionRefresh))
 	mux.HandleFunc("POST /environments/{id}/rds-credentials", revealRDSCredentialsHandler(d))
+	mux.HandleFunc("POST /environments/{id}/redis-credentials", revealRedisCredentialsHandler(d))
 	mux.HandleFunc("POST /environments/{id}/destroy-preview", enqueueHandler(d, store.ActionDestroyPreview))
 	mux.HandleFunc("POST /environments/{id}/cancel-destroy", cancelDestroyHandler(d))
 	mux.HandleFunc("POST /environments/{id}/destroy", destroyHandler(d))
@@ -121,6 +122,30 @@ func revealRDSCredentialsHandler(d Deps) http.HandlerFunc {
 	}
 }
 
+func revealRedisCredentialsHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if env, err := d.Store.GetEnvironment(r.Context(), id); err != nil || env.Status != store.EnvUp {
+			http.Error(w, "Redis credentials are not available", http.StatusNotFound)
+			return
+		}
+		secret, err := d.Store.GetEnvironmentSecret(r.Context(), id, store.SecretRedisAuth)
+		if err != nil {
+			http.Error(w, "Redis credentials are not available", http.StatusNotFound)
+			return
+		}
+		data := map[string]any{
+			"Username": secret.Username,
+			"Token":    secret.Password,
+			"Host":     formatScalar(secret.Metadata["primary_endpoint"]),
+			"Port":     formatScalar(secret.Metadata["port"]),
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = d.Renderer.RenderPartial(w, "redis_credentials", data)
+	}
+}
+
 // envViewData is the template payload shared by the detail page and the status
 // fragment: the environment, the latest job id/logs (for the SSE pane), a
 // preview plan string, and a formatted public-IP list.
@@ -136,6 +161,7 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 		"RDSEndpoint": "", "RDSAddress": "", "RDSPort": "", "RDSUsername": "",
 		"HasRDSSecret":  false,
 		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
+		"HasRedisSecret": false,
 	}
 	if len(jobs) > 0 {
 		data["CurrentJobID"] = jobs[0].ID // DESC order → newest first
@@ -175,6 +201,11 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 	if env.Status == store.EnvUp && data["RDSEndpoint"] != "" {
 		if has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRDSMySQL); err == nil {
 			data["HasRDSSecret"] = has
+		}
+	}
+	if env.Status == store.EnvUp && data["RedisEndpoint"] != "" {
+		if has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRedisAuth); err == nil {
+			data["HasRedisSecret"] = has
 		}
 	}
 	return data

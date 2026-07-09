@@ -83,7 +83,10 @@ func buildProgram(spec provisioner.Spec) pulumi.RunFunc {
 			}
 		}
 		if p.Redis.Enabled {
-			if err := declareRedis(ctx, p.Redis, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput()); err != nil {
+			if p.Redis.AuthEnabled && spec.Secrets.RedisAuthToken == "" {
+				return fmt.Errorf("redis auth token is required when Redis auth is enabled")
+			}
+			if err := declareRedis(ctx, p.Redis, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput(), spec.Secrets.RedisAuthToken); err != nil {
 				return err
 			}
 		}
@@ -301,7 +304,7 @@ func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInp
 	return nil
 }
 
-func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput, authToken string) error {
 	cacheSG, err := ec2.NewSecurityGroup(ctx, "hermes-redis-sg", &ec2.SecurityGroupArgs{
 		VpcId: vpcID,
 		Egress: ec2.SecurityGroupEgressArray{
@@ -335,7 +338,7 @@ func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID pulumi.Strin
 	if err != nil {
 		return err
 	}
-	rg, err := elasticache.NewReplicationGroup(ctx, "hermes-redis", &elasticache.ReplicationGroupArgs{
+	args := &elasticache.ReplicationGroupArgs{
 		ApplyImmediately: pulumi.Bool(true),
 		Description:      pulumi.String("Hermes Redis"),
 		Engine:           pulumi.String(cfg.Engine),
@@ -345,7 +348,13 @@ func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID pulumi.Strin
 		Port:             pulumi.Int(cfg.Port),
 		SecurityGroupIds: pulumi.StringArray{cacheSG.ID()},
 		SubnetGroupName:  subnetGroup.Name,
-	})
+	}
+	if cfg.AuthEnabled {
+		args.TransitEncryptionEnabled = pulumi.Bool(true)
+		args.AuthToken = pulumi.ToSecret(pulumi.String(authToken)).(pulumi.StringOutput).ToStringPtrOutput()
+		args.AuthTokenUpdateStrategy = pulumi.String("SET")
+	}
+	rg, err := elasticache.NewReplicationGroup(ctx, "hermes-redis", args)
 	if err != nil {
 		return err
 	}

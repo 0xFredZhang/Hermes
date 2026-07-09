@@ -100,7 +100,7 @@ func TestCreateBlueprintPersistsOptionalResources(t *testing.T) {
 		"rds_enabled":  {"on"}, "rds_engine_version": {"8.0"}, "rds_instance_class": {"db.t3.micro"},
 		"rds_allocated_storage_gb": {"20"}, "rds_db_name": {"app"}, "rds_username": {"admin"},
 		"redis_enabled": {"on"}, "redis_engine_version": {"7.2"}, "redis_node_type": {"cache.t3.micro"},
-		"redis_node_count": {"1"},
+		"redis_node_count": {"1"}, "redis_auth_enabled": {"on"},
 	}
 	rec := authedPost(t, d, "/blueprints", form)
 	if rec.Code != http.StatusSeeOther {
@@ -120,7 +120,7 @@ func TestCreateBlueprintPersistsOptionalResources(t *testing.T) {
 	if !got.Redis.Enabled || got.Redis.Engine != "redis" || got.Redis.EngineVersion != "7.2" {
 		t.Fatalf("Redis config not persisted with defaults: %+v", got.Redis)
 	}
-	if got.Redis.NodeType != "cache.t3.micro" || got.Redis.NodeCount != 1 || got.Redis.Port != 6379 {
+	if got.Redis.NodeType != "cache.t3.micro" || got.Redis.NodeCount != 1 || got.Redis.Port != 6379 || !got.Redis.AuthEnabled {
 		t.Fatalf("Redis fields not persisted correctly: %+v", got.Redis)
 	}
 }
@@ -223,6 +223,7 @@ func TestBlueprintFormHasLiveControls(t *testing.T) {
 		`name="rds_db_name" value="app"`,
 		`name="rds_username" value="admin"`,
 		`name="redis_enabled"`,
+		`name="redis_auth_enabled"`,
 		`name="redis_node_type" value="cache.t3.micro"`,
 		`name="redis_node_count" type="number" value="1"`,
 		`name="network_enabled"`,

@@ -182,6 +182,10 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 			o.fail(ctx, jobID, env.ID, logs, err)
 			return
 		}
+		if err := o.syncRedisAuthSecretMetadata(ctx, env, res.Outputs); err != nil {
+			o.fail(ctx, jobID, env.ID, logs, err)
+			return
+		}
 		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvUp)
 	case store.ActionDestroy:
 		if err := o.prov.Destroy(ctx, spec, logs); err != nil {

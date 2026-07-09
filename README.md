@@ -105,9 +105,15 @@ RDS/Redis 默认关闭。启用后使用低成本开发默认值：MySQL 8.0、
 master 密码由 Hermes 使用强随机数生成，和用户名一起加密保存在本地 SQLite
 `environment_secrets` 表中；Pulumi 创建 RDS 时只拿到运行时 secret 输入。密码不会写入
 Hermes 环境 outputs，也不会出现在常规状态轮询里；环境进入 `up` 后，可以在环境详情页按需
-点击“显示凭据”查看。当前 Redis 仍不启用 auth token，访问边界依赖 VPC 与安全组。
+点击“显示凭据”查看。
 
-Hermes 暂不接入 AWS Secrets Manager：本轮只解决开发/自用场景下的 MySQL 凭据保存与查看。
+Redis 默认仍不启用 auth token，访问边界依赖 VPC 与安全组。如果在蓝图中勾选 Redis
+AUTH，Hermes 会生成一个 ElastiCache auth token，并和默认用户名 `default` 一起加密保存到
+本地 SQLite；Pulumi 创建 Redis 时会把 token 作为 secret 输入，同时启用 in-transit
+encryption。Redis token 不会写入 Hermes outputs，也不会出现在常规状态轮询里；环境进入
+`up` 后，可以在环境详情页按需点击“显示凭据”查看。
+
+Hermes 暂不接入 AWS Secrets Manager：本轮只解决开发/自用场景下的 MySQL/Redis 凭据保存与查看。
 如果后续需要自动轮换、跨服务读取、审计或托管密钥策略，再引入 Secrets Manager。
 如果使用的是 M3a 期间已创建的 RDS 环境，旧密码仍只存在于当时的 Pulumi state；
 建议先销毁重建，或后续单独做一次凭据导入/重置迁移。
@@ -158,13 +164,14 @@ AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=ap-southeast-1 make t
 资源，可显式打开：
 
 ```bash
-HERMES_IT_NETWORK=1 HERMES_IT_RDS=1 HERMES_IT_REDIS=1 \
+HERMES_IT_NETWORK=1 HERMES_IT_RDS=1 HERMES_IT_REDIS=1 HERMES_IT_REDIS_AUTH=1 \
 AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=ap-southeast-1 \
 make test-integration
 ```
 
 Hermes-managed VPC 本身不产生 NAT Gateway 费用；EC2/EIP、RDS 与 ElastiCache
-仍可能产生费用。RDS 与 ElastiCache 的创建和销毁耗时明显更长。
+仍可能产生费用。RDS 与 ElastiCache 的创建和销毁耗时明显更长。`HERMES_IT_REDIS_AUTH=1`
+会自动启用 Redis，并额外验证 Redis auth token 不会作为 output 导出。
 
 M2 已用真实 AWS 手动验证：EC2、安全组、弹性 IP 可以成功创建。确认 destroy
 后 EC2、安全组、弹性 IP 都已清理时，可以把资源清理记录补到里程碑计划里。

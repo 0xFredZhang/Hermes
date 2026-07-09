@@ -47,6 +47,11 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	if os.Getenv("HERMES_IT_REDIS") != "" {
 		spec.Params.Redis.Enabled = true
 	}
+	if os.Getenv("HERMES_IT_REDIS_AUTH") != "" {
+		spec.Params.Redis.Enabled = true
+		spec.Params.Redis.AuthEnabled = true
+		spec.Secrets.RedisAuthToken = "HermesRedisAuthToken123!"
+	}
 	if os.Getenv("HERMES_IT_NETWORK") != "" {
 		spec.Params.Network.Enabled = true
 	}
@@ -80,6 +85,9 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	}
 	if spec.Params.Redis.Enabled && res.Outputs["redis_primary_endpoint"] == nil {
 		t.Fatalf("expected redis_primary_endpoint output, got %+v", res.Outputs)
+	}
+	if spec.Params.Redis.AuthEnabled && res.Outputs["redis_auth_token"] != nil {
+		t.Fatalf("must not export generated Redis auth token, got %+v", res.Outputs)
 	}
 
 	// Destroy tears down the resources AND removes the now-empty stack.

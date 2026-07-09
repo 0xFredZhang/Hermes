@@ -78,6 +78,9 @@ func TestDefaultOptionalResources(t *testing.T) {
 	if p.Redis.NodeCount != 1 || p.Redis.Port != 6379 {
 		t.Fatalf("unexpected Redis defaults: %+v", p.Redis)
 	}
+	if p.Redis.AuthEnabled {
+		t.Fatalf("Redis auth should default disabled: %+v", p.Redis)
+	}
 }
 
 func TestValidateManagedNetwork(t *testing.T) {
@@ -141,6 +144,8 @@ func TestValidateOptionalResources(t *testing.T) {
 		{"rds bad engine", func(p *BlueprintParams) { p.RDS.Enabled = true; p.RDS.Engine = "postgres" }, true},
 		{"rds bad port", func(p *BlueprintParams) { p.RDS.Enabled = true; p.RDS.Port = 70000 }, true},
 		{"redis valid defaults", func(p *BlueprintParams) { p.Redis.Enabled = true }, false},
+		{"redis auth valid", func(p *BlueprintParams) { p.Redis.Enabled = true; p.Redis.AuthEnabled = true }, false},
+		{"redis auth requires redis enabled", func(p *BlueprintParams) { p.Redis.AuthEnabled = true }, true},
 		{"redis bad engine", func(p *BlueprintParams) { p.Redis.Enabled = true; p.Redis.Engine = "valkey" }, true},
 		{"redis bad node count", func(p *BlueprintParams) { p.Redis.Enabled = true; p.Redis.NodeCount = 6 }, true},
 		{"redis bad port", func(p *BlueprintParams) { p.Redis.Enabled = true; p.Redis.Port = 70000 }, true},
@@ -175,6 +180,9 @@ func TestBlueprintParamsOldJSONDefaultsOptionalResources(t *testing.T) {
 	}
 	if p.RDS.Enabled || p.Redis.Enabled {
 		t.Fatalf("old blueprint JSON should keep optional resources disabled: rds=%+v redis=%+v", p.RDS, p.Redis)
+	}
+	if p.Redis.AuthEnabled {
+		t.Fatalf("old blueprint JSON should keep Redis auth disabled: %+v", p.Redis)
 	}
 	if p.Network.Enabled {
 		t.Fatalf("old blueprint JSON should keep managed network disabled: %+v", p.Network)

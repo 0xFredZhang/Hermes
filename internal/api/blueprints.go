@@ -85,6 +85,7 @@ func handleCreateBlueprint(w http.ResponseWriter, r *http.Request, d Deps) {
 			NodeType:      r.FormValue("redis_node_type"),
 			NodeCount:     redisNodes,
 			Port:          6379,
+			AuthEnabled:   r.FormValue("redis_auth_enabled") != "",
 		},
 	}
 	params.ApplyDefaults()

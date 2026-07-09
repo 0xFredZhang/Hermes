@@ -337,6 +337,76 @@ func TestBuildProgramRequiresRuntimeRDSPassword(t *testing.T) {
 	}
 }
 
+func TestBuildProgramDeclaresRedisAuthToken(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2:   provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		Redis: provisioner.Redis{Enabled: true, AuthEnabled: true},
+	}
+	params.ApplyDefaults()
+	m := &recordMocks{}
+	var outputs map[string]any
+	const redisToken = "RedisAuthTokenForHermes123!"
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if err := buildProgram(provisioner.Spec{
+			Params:  params,
+			Secrets: provisioner.RuntimeSecrets{RedisAuthToken: redisToken},
+		})(ctx); err != nil {
+			return err
+		}
+		outputs = map[string]any{}
+		for key := range ctx.GetCurrentExportMap() {
+			outputs[key] = true
+		}
+		return nil
+	}, pulumi.WithMocks("hermes", "test", m))
+	if err != nil {
+		t.Fatalf("RunErr: %v", err)
+	}
+	redisInput, ok := resourceInputs(m.resources, "aws:elasticache/replicationGroup:ReplicationGroup", "hermes-redis")
+	if !ok {
+		t.Fatalf("Redis replication group inputs not recorded: %+v", m.resources)
+	}
+	authToken, ok := redisInput.raw["authToken"]
+	if !ok {
+		t.Fatalf("Redis authToken input missing: %+v", redisInput.raw)
+	}
+	if !authToken.ContainsSecrets() {
+		t.Fatalf("Redis authToken must be marked secret: %v", authToken)
+	}
+	if got := authToken.SecretValue().Element.StringValue(); got != redisToken {
+		t.Fatalf("Redis authToken input = %q, want runtime auth token", got)
+	}
+	if got := redisInput.raw["transitEncryptionEnabled"].BoolValue(); !got {
+		t.Fatalf("transitEncryptionEnabled = false, want true when Redis auth is enabled")
+	}
+	if got := redisInput.raw["authTokenUpdateStrategy"].StringValue(); got != "SET" {
+		t.Fatalf("authTokenUpdateStrategy = %q, want SET", got)
+	}
+	if outputs["redis_auth_token"] != nil {
+		t.Fatalf("Redis auth token must not be exported: %+v", outputs)
+	}
+}
+
+func TestBuildProgramRequiresRuntimeRedisAuthToken(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2:   provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		Redis: provisioner.Redis{Enabled: true, AuthEnabled: true},
+	}
+	m := &recordMocks{}
+	err := pulumi.RunErr(buildProgram(provisioner.Spec{Params: params}), pulumi.WithMocks("hermes", "test", m))
+	if err == nil || !strings.Contains(err.Error(), "redis auth token") {
+		t.Fatalf("RunErr err = %v, want missing redis auth token error", err)
+	}
+}
+
 func resourceInputs(records []resourceRecord, typ, name string) (resourceRecord, bool) {
 	for _, r := range records {
 		if r.typ == typ && r.name == name {

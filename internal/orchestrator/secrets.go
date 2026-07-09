@@ -12,27 +12,45 @@ import (
 )
 
 const (
-	rdsPasswordLength = 24
-	rdsPasswordChars  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&*()-_=+[]{}<>:?"
+	rdsPasswordLength    = 24
+	rdsPasswordChars     = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&*()-_=+[]{}<>:?"
+	redisAuthTokenLength = 32
+	redisAuthTokenChars  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!&#$^<>-"
+	redisAuthDefaultUser = "default"
 )
 
 func (o *Orchestrator) prepareRuntimeSecrets(ctx context.Context, env store.Environment) (provisioner.RuntimeSecrets, error) {
 	env.Snapshot.ApplyDefaults()
-	if !env.Snapshot.RDS.Enabled {
-		return provisioner.RuntimeSecrets{}, nil
+	var secrets provisioner.RuntimeSecrets
+	if env.Snapshot.RDS.Enabled {
+		password, err := o.prepareRDSPassword(ctx, env)
+		if err != nil {
+			return provisioner.RuntimeSecrets{}, err
+		}
+		secrets.RDSPassword = password
 	}
+	if env.Snapshot.Redis.Enabled && env.Snapshot.Redis.AuthEnabled {
+		token, err := o.prepareRedisAuthToken(ctx, env)
+		if err != nil {
+			return provisioner.RuntimeSecrets{}, err
+		}
+		secrets.RedisAuthToken = token
+	}
+	return secrets, nil
+}
 
+func (o *Orchestrator) prepareRDSPassword(ctx context.Context, env store.Environment) (string, error) {
 	secret, err := o.store.GetEnvironmentSecret(ctx, env.ID, store.SecretRDSMySQL)
 	if err == nil {
-		return provisioner.RuntimeSecrets{RDSPassword: secret.Password}, nil
+		return secret.Password, nil
 	}
 	if !errors.Is(err, store.ErrEnvironmentSecretNotFound) {
-		return provisioner.RuntimeSecrets{}, err
+		return "", err
 	}
 
 	password, err := generateRDSPassword()
 	if err != nil {
-		return provisioner.RuntimeSecrets{}, err
+		return "", err
 	}
 	if err := o.store.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
 		EnvironmentID: env.ID,
@@ -41,9 +59,34 @@ func (o *Orchestrator) prepareRuntimeSecrets(ctx context.Context, env store.Envi
 		Password:      password,
 		Metadata:      rdsSecretMetadata(env.Snapshot.RDS),
 	}); err != nil {
-		return provisioner.RuntimeSecrets{}, err
+		return "", err
 	}
-	return provisioner.RuntimeSecrets{RDSPassword: password}, nil
+	return password, nil
+}
+
+func (o *Orchestrator) prepareRedisAuthToken(ctx context.Context, env store.Environment) (string, error) {
+	secret, err := o.store.GetEnvironmentSecret(ctx, env.ID, store.SecretRedisAuth)
+	if err == nil {
+		return secret.Password, nil
+	}
+	if !errors.Is(err, store.ErrEnvironmentSecretNotFound) {
+		return "", err
+	}
+
+	token, err := generateRedisAuthToken()
+	if err != nil {
+		return "", err
+	}
+	if err := o.store.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: env.ID,
+		Kind:          store.SecretRedisAuth,
+		Username:      redisAuthDefaultUser,
+		Password:      token,
+		Metadata:      redisSecretMetadata(env.Snapshot.Redis),
+	}); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func (o *Orchestrator) syncRDSSecretMetadata(ctx context.Context, env store.Environment, outputs map[string]any) error {
@@ -82,15 +125,59 @@ func (o *Orchestrator) syncRDSSecretMetadata(ctx context.Context, env store.Envi
 	})
 }
 
+func (o *Orchestrator) syncRedisAuthSecretMetadata(ctx context.Context, env store.Environment, outputs map[string]any) error {
+	env.Snapshot.ApplyDefaults()
+	if !env.Snapshot.Redis.Enabled || !env.Snapshot.Redis.AuthEnabled {
+		return nil
+	}
+	secret, err := o.store.GetEnvironmentSecret(ctx, env.ID, store.SecretRedisAuth)
+	if err != nil {
+		return err
+	}
+
+	metadata := map[string]any{}
+	for k, v := range secret.Metadata {
+		metadata[k] = v
+	}
+	for k, v := range redisSecretMetadata(env.Snapshot.Redis) {
+		metadata[k] = v
+	}
+	if endpoint := outputString(outputs, "redis_primary_endpoint"); endpoint != "" {
+		metadata["primary_endpoint"] = endpoint
+	}
+	if endpoint := outputString(outputs, "redis_reader_endpoint"); endpoint != "" {
+		metadata["reader_endpoint"] = endpoint
+	}
+	if port := outputs["redis_port"]; port != nil {
+		metadata["port"] = port
+	}
+
+	return o.store.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: env.ID,
+		Kind:          store.SecretRedisAuth,
+		Username:      redisAuthDefaultUser,
+		Password:      secret.Password,
+		Metadata:      metadata,
+	})
+}
+
 func generateRDSPassword() (string, error) {
-	buf := make([]byte, rdsPasswordLength)
-	max := big.NewInt(int64(len(rdsPasswordChars)))
+	return generateSecret(rdsPasswordLength, rdsPasswordChars)
+}
+
+func generateRedisAuthToken() (string, error) {
+	return generateSecret(redisAuthTokenLength, redisAuthTokenChars)
+}
+
+func generateSecret(length int, chars string) (string, error) {
+	buf := make([]byte, length)
+	max := big.NewInt(int64(len(chars)))
 	for i := range buf {
 		n, err := rand.Int(rand.Reader, max)
 		if err != nil {
 			return "", err
 		}
-		buf[i] = rdsPasswordChars[n.Int64()]
+		buf[i] = chars[n.Int64()]
 	}
 	return string(buf), nil
 }
@@ -99,6 +186,12 @@ func rdsSecretMetadata(cfg provisioner.RDS) map[string]any {
 	return map[string]any{
 		"db_name": cfg.DBName,
 		"port":    float64(cfg.Port),
+	}
+}
+
+func redisSecretMetadata(cfg provisioner.Redis) map[string]any {
+	return map[string]any{
+		"port": float64(cfg.Port),
 	}
 }
 

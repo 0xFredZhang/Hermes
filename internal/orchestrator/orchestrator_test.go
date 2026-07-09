@@ -112,6 +112,19 @@ func rdsParams() provisioner.BlueprintParams {
 	return p
 }
 
+func redisAuthParams() provisioner.BlueprintParams {
+	p := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2:   provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		Redis: provisioner.Redis{Enabled: true, AuthEnabled: true},
+	}
+	p.ApplyDefaults()
+	return p
+}
+
 func TestRunPreviewSucceeds(t *testing.T) {
 	st, envID := newSeededStore(t)
 	ctx := context.Background()
@@ -158,6 +171,34 @@ func TestRunPreviewWithRDSGeneratesAndStoresPassword(t *testing.T) {
 	}
 	if secret.Metadata["db_name"] != "app" || secret.Metadata["port"] != float64(3306) {
 		t.Fatalf("stored metadata = %+v, want db_name/port", secret.Metadata)
+	}
+}
+
+func TestRunPreviewWithRedisAuthGeneratesAndStoresToken(t *testing.T) {
+	st, envID := newSeededStoreWithParams(t, redisAuthParams())
+	ctx := context.Background()
+	prov := &fakeProvisioner{logLine: "previewing redis"}
+	o := New(st, prov, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionPreview})
+	o.run(ctx, jobID)
+
+	if len(prov.previewSpecs) != 1 {
+		t.Fatalf("preview specs = %d, want 1", len(prov.previewSpecs))
+	}
+	gotToken := prov.previewSpecs[0].Secrets.RedisAuthToken
+	if len(gotToken) != 32 {
+		t.Fatalf("runtime Redis auth token length = %d, want 32", len(gotToken))
+	}
+	secret, err := st.GetEnvironmentSecret(ctx, envID, store.SecretRedisAuth)
+	if err != nil {
+		t.Fatalf("GetEnvironmentSecret: %v", err)
+	}
+	if secret.Username != "default" || secret.Password != gotToken {
+		t.Fatalf("stored Redis secret = %+v, want default user and generated token", secret)
+	}
+	if secret.Metadata["port"] != float64(6379) {
+		t.Fatalf("stored Redis metadata = %+v, want port", secret.Metadata)
 	}
 }
 
@@ -254,6 +295,50 @@ func TestRunUpWithRDSReusesExistingPassword(t *testing.T) {
 	}
 	if secret.Metadata["host"] != "db.example" || secret.Metadata["endpoint"] != "db.example:3306" {
 		t.Fatalf("stored metadata = %+v, want RDS endpoint details from outputs", secret.Metadata)
+	}
+}
+
+func TestRunUpWithRedisAuthReusesExistingToken(t *testing.T) {
+	st, envID := newSeededStoreWithParams(t, redisAuthParams())
+	ctx := context.Background()
+	if err := st.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: envID,
+		Kind:          store.SecretRedisAuth,
+		Username:      "default",
+		Password:      "existing-redis-token",
+		Metadata: map[string]any{
+			"port": float64(6379),
+		},
+	}); err != nil {
+		t.Fatalf("UpsertEnvironmentSecret: %v", err)
+	}
+	prov := &fakeProvisioner{
+		outputs: map[string]any{
+			"redis_primary_endpoint": "redis.example",
+			"redis_reader_endpoint":  "redis-ro.example",
+			"redis_port":             float64(6379),
+		},
+	}
+	o := New(st, prov, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
+	o.run(ctx, jobID)
+
+	if len(prov.upSpecs) != 1 {
+		t.Fatalf("up specs = %d, want 1", len(prov.upSpecs))
+	}
+	if got := prov.upSpecs[0].Secrets.RedisAuthToken; got != "existing-redis-token" {
+		t.Fatalf("runtime Redis auth token = %q, want existing token", got)
+	}
+	secret, err := st.GetEnvironmentSecret(ctx, envID, store.SecretRedisAuth)
+	if err != nil {
+		t.Fatalf("GetEnvironmentSecret: %v", err)
+	}
+	if secret.Password != "existing-redis-token" {
+		t.Fatalf("stored Redis token = %q, want unchanged existing token", secret.Password)
+	}
+	if secret.Metadata["primary_endpoint"] != "redis.example" || secret.Metadata["reader_endpoint"] != "redis-ro.example" {
+		t.Fatalf("stored Redis metadata = %+v, want endpoint details from outputs", secret.Metadata)
 	}
 }
 

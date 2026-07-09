@@ -71,6 +71,10 @@
         {{if .RedisEndpoint}}<p class="output-line">主 Endpoint:{{.RedisEndpoint}}</p>{{end}}
         {{if .RedisReader}}<p class="output-line">读 Endpoint:{{.RedisReader}}</p>{{end}}
         {{if .RedisPort}}<p class="output-line">端口:{{.RedisPort}}</p>{{end}}
+        {{if .HasRedisSecret}}
+          <div id="redis-credentials-{{.Env.ID}}"></div>
+          <button type="button" hx-post="/environments/{{.Env.ID}}/redis-credentials" hx-target="#redis-credentials-{{.Env.ID}}" hx-swap="innerHTML">显示凭据</button>
+        {{end}}
       </section>
     {{end}}
     </div>
@@ -105,5 +109,14 @@
   {{if .Port}}<p class="output-line">端口:{{.Port}}</p>{{end}}
   <p class="output-line">用户名:{{.Username}}</p>
   <p class="output-line">口令:{{.Password}}</p>
+</div>
+{{end}}
+
+{{define "redis_credentials"}}
+<div class="notice ok">
+  {{if .Host}}<p class="output-line">主 Endpoint:{{.Host}}</p>{{end}}
+  {{if .Port}}<p class="output-line">端口:{{.Port}}</p>{{end}}
+  <p class="output-line">用户名:{{.Username}}</p>
+  <p class="output-line">Token:{{.Token}}</p>
 </div>
 {{end}}

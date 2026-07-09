@@ -72,25 +72,26 @@ func TestRenderPartialEnvStatusRichOutputs(t *testing.T) {
 	}
 	var b bytes.Buffer
 	data := map[string]any{
-		"Env":           map[string]any{"ID": int64(1), "Status": "up"},
-		"PublicIPs":     "52.1.2.3",
-		"PublicDNS":     "ec2-52-1-2-3.compute.amazonaws.com",
-		"VPCID":         "vpc-123",
-		"SubnetIDs":     "subnet-1, subnet-2",
-		"RDSEndpoint":   "db.example:3306",
-		"RDSAddress":    "db.example",
-		"RDSPort":       "3306",
-		"RDSUsername":   "admin",
-		"HasRDSSecret":  true,
-		"RedisEndpoint": "redis.example",
-		"RedisReader":   "redis-ro.example",
-		"RedisPort":     "6379",
+		"Env":            map[string]any{"ID": int64(1), "Status": "up"},
+		"PublicIPs":      "52.1.2.3",
+		"PublicDNS":      "ec2-52-1-2-3.compute.amazonaws.com",
+		"VPCID":          "vpc-123",
+		"SubnetIDs":      "subnet-1, subnet-2",
+		"RDSEndpoint":    "db.example:3306",
+		"RDSAddress":     "db.example",
+		"RDSPort":        "3306",
+		"RDSUsername":    "admin",
+		"HasRDSSecret":   true,
+		"RedisEndpoint":  "redis.example",
+		"RedisReader":    "redis-ro.example",
+		"RedisPort":      "6379",
+		"HasRedisSecret": true,
 	}
 	if err := r.RenderPartial(&b, "env_status", data); err != nil {
 		t.Fatalf("RenderPartial: %v", err)
 	}
 	out := b.String()
-	for _, want := range []string{"EC2", "网络", "数据库", "Redis", "52.1.2.3", "vpc-123", "db.example:3306", "admin", "redis.example", "显示凭据", "/environments/1/rds-credentials"} {
+	for _, want := range []string{"EC2", "网络", "数据库", "Redis", "52.1.2.3", "vpc-123", "db.example:3306", "admin", "redis.example", "显示凭据", "/environments/1/rds-credentials", "/environments/1/redis-credentials"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("env_status output missing %q: %s", want, out)
 		}
@@ -119,6 +120,29 @@ func TestRenderPartialRDSCredentials(t *testing.T) {
 	for _, want := range []string{"admin", "stored-rds-secret", "db.example", "3306"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("rds_credentials missing %q: %s", want, out)
+		}
+	}
+}
+
+func TestRenderPartialRedisCredentials(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	var b bytes.Buffer
+	data := map[string]any{
+		"Username": "default",
+		"Token":    "stored-redis-token",
+		"Host":     "redis.example",
+		"Port":     "6379",
+	}
+	if err := r.RenderPartial(&b, "redis_credentials", data); err != nil {
+		t.Fatalf("RenderPartial: %v", err)
+	}
+	out := b.String()
+	for _, want := range []string{"default", "stored-redis-token", "redis.example", "6379"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("redis_credentials missing %q: %s", want, out)
 		}
 	}
 }

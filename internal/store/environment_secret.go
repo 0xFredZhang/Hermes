@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	SecretRDSMySQL = "rds_mysql"
+	SecretRDSMySQL  = "rds_mysql"
+	SecretRedisAuth = "redis_auth"
 )
 
 var ErrEnvironmentSecretNotFound = errors.New("environment secret not found")

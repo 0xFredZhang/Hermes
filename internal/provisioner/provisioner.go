@@ -53,6 +53,7 @@ type Redis struct {
 	NodeType      string `json:"node_type"`
 	NodeCount     int    `json:"node_count"`
 	Port          int    `json:"port"`
+	AuthEnabled   bool   `json:"auth_enabled"`
 }
 
 type BlueprintParams struct {
@@ -191,6 +192,8 @@ func (p *BlueprintParams) Validate() error {
 		if p.Redis.Port < 1 || p.Redis.Port > 65535 {
 			return fmt.Errorf("redis.port out of range: %d", p.Redis.Port)
 		}
+	} else if p.Redis.AuthEnabled {
+		return fmt.Errorf("redis.auth_enabled requires redis.enabled")
 	}
 	return nil
 }
@@ -201,7 +204,8 @@ type AWSCreds struct {
 }
 
 type RuntimeSecrets struct {
-	RDSPassword string
+	RDSPassword    string
+	RedisAuthToken string
 }
 
 // Spec is the per-execution input to a Provisioner. Process-level config
