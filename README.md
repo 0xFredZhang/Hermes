@@ -33,7 +33,8 @@ make env
 - `HERMES_DB_PATH`：SQLite 数据库路径，默认 `hermes.db`。
 - `HERMES_PULUMI_BACKEND`：Pulumi state backend，默认
   `file://<repo>/data/pulumi-state`。如需共享 state，可先创建 S3 bucket，
-  再设置为 `s3://<bucket>/<optional-prefix>`。
+  再设置为 `s3://<bucket>/<optional-prefix>`。Hermes 启动时会校验该值，
+  当前只接受 `file://<path>` 或 `s3://<bucket>[/prefix]`。
 - `HERMES_PULUMI_PROJECT`：Pulumi project 名称，默认 `hermes`。
 - `HERMES_WORKERS`：provisioning worker 数量，默认 `2`。
 

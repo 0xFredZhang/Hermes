@@ -65,6 +65,50 @@ func TestLoadProvisioningDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsSupportedPulumiBackends(t *testing.T) {
+	tests := []string{
+		"file:///tmp/hermes-pulumi-state",
+		"s3://hermes-state",
+		"s3://hermes-state/team/dev",
+	}
+	for _, backend := range tests {
+		t.Run(backend, func(t *testing.T) {
+			t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+			t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+			t.Setenv("HERMES_PULUMI_BACKEND", backend)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.PulumiBackend != backend {
+				t.Fatalf("PulumiBackend = %q, want %q", cfg.PulumiBackend, backend)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsBadPulumiBackend(t *testing.T) {
+	tests := []string{
+		"data/pulumi-state",
+		"file://",
+		"s3://",
+		"s3:///prefix-only",
+		"azblob://hermes-state",
+	}
+	for _, backend := range tests {
+		t.Run(backend, func(t *testing.T) {
+			t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+			t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+			t.Setenv("HERMES_PULUMI_BACKEND", backend)
+
+			if _, err := Load(); err == nil {
+				t.Fatalf("expected error for HERMES_PULUMI_BACKEND=%q", backend)
+			}
+		})
+	}
+}
+
 func TestLoadWorkersOverride(t *testing.T) {
 	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
 	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")

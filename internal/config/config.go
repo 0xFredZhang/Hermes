@@ -4,9 +4,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -52,6 +54,9 @@ func Load() (Config, error) {
 		}
 		cfg.PulumiBackend = "file://" + filepath.Join(cwd, "data", "pulumi-state")
 	}
+	if err := validatePulumiBackend(cfg.PulumiBackend); err != nil {
+		return Config{}, err
+	}
 
 	cfg.Workers = 2
 	if w := os.Getenv("HERMES_WORKERS"); w != "" {
@@ -70,4 +75,25 @@ func envOr(name, def string) string {
 		return v
 	}
 	return def
+}
+
+func validatePulumiBackend(backend string) error {
+	if path, ok := strings.CutPrefix(backend, "file://"); ok {
+		if path == "" {
+			return errors.New("HERMES_PULUMI_BACKEND file:// URL requires a state directory path")
+		}
+		return nil
+	}
+
+	u, err := url.Parse(backend)
+	if err != nil {
+		return fmt.Errorf("HERMES_PULUMI_BACKEND is not a valid URL: %w", err)
+	}
+	if u.Scheme != "s3" {
+		return fmt.Errorf("HERMES_PULUMI_BACKEND must use file:// or s3://, got %q", backend)
+	}
+	if u.Host == "" {
+		return errors.New("HERMES_PULUMI_BACKEND s3:// URL requires a bucket name")
+	}
+	return nil
 }
