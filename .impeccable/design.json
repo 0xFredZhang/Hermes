@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-09T06:20:26Z",
+  "title": "Design System: Hermes",
+  "extensions": {
+    "colorMeta": {
+      "console-canvas": {
+        "role": "neutral",
+        "displayName": "Console Canvas",
+        "canonical": "#f6f8fb",
+        "tonalRamp": ["#18202a", "#344152", "#56677b", "#7a8da2", "#a3b1c1", "#c8d1dc", "#e7edf4", "#f6f8fb"]
+      },
+      "console-surface": {
+        "role": "neutral",
+        "displayName": "Console Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#b3b3b3", "#e6e6e6", "#ffffff"]
+      },
+      "console-ink": {
+        "role": "neutral",
+        "displayName": "Control Ink",
+        "canonical": "#111827",
+        "tonalRamp": ["#05070c", "#111827", "#243044", "#374862", "#55667f", "#7f8ea4", "#b8c2d0", "#eef2f6"]
+      },
+      "console-border": {
+        "role": "neutral",
+        "displayName": "Console Border",
+        "canonical": "#d8dee7",
+        "tonalRamp": ["#202832", "#3f4b59", "#667586", "#8d9aaa", "#b4bfcc", "#d8dee7", "#edf1f6", "#f8fafc"]
+      },
+      "console-muted": {
+        "role": "neutral",
+        "displayName": "Muted Text",
+        "canonical": "#4b5563",
+        "tonalRamp": ["#0f1115", "#252b33", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"]
+      },
+      "console-primary": {
+        "role": "primary",
+        "displayName": "Console Primary",
+        "canonical": "#255f85",
+        "tonalRamp": ["#07151e", "#102f43", "#174565", "#255f85", "#3f7da3", "#73a5c2", "#b7d2e1", "#e6f2f8"]
+      },
+      "console-danger": {
+        "role": "primary",
+        "displayName": "Danger Text",
+        "canonical": "#b42318",
+        "tonalRamp": ["#2a0704", "#5f120b", "#8b1a12", "#b42318", "#d34f43", "#ee9a91", "#fecdca", "#fef3f2"]
+      },
+      "console-success": {
+        "role": "primary",
+        "displayName": "Success Text",
+        "canonical": "#087443",
+        "tonalRamp": ["#032015", "#06492d", "#087443", "#12965c", "#32b979", "#75d7a7", "#b6ebd0", "#ecfdf3"]
+      },
+      "console-log": {
+        "role": "neutral",
+        "displayName": "Log Surface",
+        "canonical": "#101828",
+        "tonalRamp": ["#03050a", "#101828", "#1f2937", "#384354", "#5b6678", "#8b95a5", "#c7ced8", "#eef2f6"]
+      },
+      "console-log-text": {
+        "role": "neutral",
+        "displayName": "Log Text",
+        "canonical": "#e5e7eb",
+        "tonalRamp": ["#111827", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#e5e7eb", "#ffffff"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Product title only; avoid hero-scale typography."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles for console sections."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Subsections such as logs and environment output groups."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tables, forms, operational copy, and values."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels and compact control text."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms ease-out",
+        "purpose": "Future state transitions for hover, focus, disabled, and htmx loading feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "640px"
+      },
+      {
+        "name": "content-max",
+        "value": "960px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Compact action button for safe operations such as add, save, deploy, retry, and drift detection.",
+      "html": "<button class=\"ds-btn-default\">Save blueprint</button>",
+      "css": ".ds-btn-default { font: 400 1rem system-ui, sans-serif; color: #111827; background: #ffffff; border: 1px solid #d8dee7; border-radius: 6px; padding: 8px 12px; cursor: pointer; transition: background 150ms ease-out, border-color 150ms ease-out; } .ds-btn-default:hover { background: #eef2f6; border-color: #255f85; color: #174565; } .ds-btn-default:active { background: #e2e8f0; } .ds-btn-default:focus-visible { outline: 2px solid #255f85; outline-offset: 2px; } .ds-btn-default:disabled { opacity: .5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Destructive action button for delete, destroy, and confirm destroy.",
+      "html": "<button class=\"ds-btn-danger\">Confirm destroy</button>",
+      "css": ".ds-btn-danger { font: 400 1rem system-ui, sans-serif; color: #b42318; background: #ffffff; border: 1px solid #b42318; border-radius: 6px; padding: 8px 12px; cursor: pointer; transition: background 150ms ease-out, color 150ms ease-out; } .ds-btn-danger:hover { color: #ffffff; background: #b42318; } .ds-btn-danger:active { background: #8b1a12; border-color: #8b1a12; } .ds-btn-danger:focus-visible { outline: 2px solid #b42318; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Compact text field for account aliases, project names, regions, and environment names.",
+      "html": "<label class=\"ds-field\"><span>Environment name</span><input class=\"ds-input\" placeholder=\"dev-app\" /></label>",
+      "css": ".ds-field { display: block; font: 400 1rem system-ui, sans-serif; color: #111827; } .ds-field span { display: block; margin: 0 0 4px; } .ds-input { font: inherit; color: #111827; background: #ffffff; border: 1px solid #d8dee7; border-radius: 6px; padding: 8px 12px; min-width: 14rem; } .ds-input::placeholder { color: #4b5563; opacity: 1; } .ds-input:focus-visible { outline: 2px solid #255f85; outline-offset: 2px; border-color: #255f85; }"
+    },
+    {
+      "name": "Status Text",
+      "kind": "custom",
+      "refersTo": "table-cell",
+      "description": "Semantic status label for environment and job states.",
+      "html": "<p class=\"ds-status ds-status-success\">Ready: environment is up</p><p class=\"ds-status ds-status-danger\">Failed: retry or destroy</p><p class=\"ds-status ds-status-muted\">Destroyed</p>",
+      "css": ".ds-status { margin: 0 0 8px; font: 400 1rem system-ui, sans-serif; } .ds-status-success { color: #087443; } .ds-status-danger { color: #b42318; } .ds-status-muted { color: #4b5563; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "table-cell",
+      "description": "Compact full-width table for accounts, projects, blueprints, and environments.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Name</th><th>Region</th><th>Status</th></tr></thead><tbody><tr><td>dev</td><td>ap-southeast-1</td><td>preview ready</td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; font: 400 1rem system-ui, sans-serif; color: #111827; } .ds-table th, .ds-table td { border: 1px solid #d8dee7; padding: 8px 12px; text-align: left; vertical-align: top; } .ds-table th { font-weight: 700; color: #4b5563; background: #eef2f6; }"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "refersTo": "button-default",
+      "description": "Simple horizontal navigation across account, project, blueprint, and environment work areas.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\">Accounts</a><a class=\"ds-nav-link\" href=\"#\">Projects</a><a class=\"ds-nav-link\" href=\"#\">Blueprints</a><a class=\"ds-nav-link\" href=\"#\">Environments</a></nav>",
+      "css": ".ds-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font: 400 1rem system-ui, sans-serif; } .ds-nav-link { min-height: 36px; border-radius: 6px; padding: 8px 12px; color: #4b5563; text-decoration: none; } .ds-nav-link:hover { color: #111827; background: #eef2f6; } .ds-nav-link:focus-visible { outline: 2px solid #255f85; outline-offset: 2px; } .ds-nav-link-active { color: #ffffff; background: #255f85; font-weight: 700; }"
+    },
+    {
+      "name": "Log Panel",
+      "kind": "custom",
+      "refersTo": "log-panel",
+      "description": "Scrollable live output panel for provisioning and destroy logs.",
+      "html": "<pre class=\"ds-log\">previewing update...\\n+ aws:ec2/instance:Instance web-0\\noutputs: public_ip=203.0.113.10</pre>",
+      "css": ".ds-log { box-sizing: border-box; max-height: 420px; overflow: auto; margin: 0; background: #101828; color: #e5e7eb; border-radius: 6px; padding: 16px; font: 400 0.875rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; line-height: 1.5; white-space: pre-wrap; } .ds-log:focus-visible { outline: 2px solid #e5e7eb; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Control Room",
+    "overview": "Hermes should feel like a compact operations console for real AWS resources: quiet, legible, and direct. The implementation remains deliberately lightweight - Go templates, htmx, server-rendered tables and forms, and a Tailwind-compiled stylesheet - so the design system strengthens the product shape without replacing it with a heavy application framework.\n\nThe visual direction is restrained product UI. It preserves fast scanning for accounts, projects, blueprints, environments, previews, and logs. Tailwind provides consistent primitives, clearer hierarchy, focus states, and safer destructive-action affordances while keeping the page simple enough to remain a self-hosted tool.",
+    "keyCharacteristics": [
+      "Compact server-rendered workflows with readable forms and tables.",
+      "Restrained neutrals with semantic status colors reserved for real state.",
+      "System typography only; no display fonts, no decorative type pairing.",
+      "Flat by default, with borders and tonal contrast doing the work.",
+      "Explicit action hierarchy for preview, provision, retry, drift detection, and destroy."
+    ],
+    "rules": [
+      {
+        "name": "The Semantic Scarcity Rule",
+        "body": "Red and green are reserved for actual state, never for decoration or brand flourish.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Future Rule",
+        "body": "When Tailwind is introduced, add one restrained primary accent for primary actions and active navigation; keep it under 10% of any screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Native Tool Rule",
+        "body": "Use one system font stack across UI labels, tables, buttons, and forms. No display font belongs in the console.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Scale Rule",
+        "body": "Product UI type sizes are fixed rem values, not viewport-scaled hero type.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. Use borders, spacing, and tonal layers before shadows.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Log Contrast Rule",
+        "body": "The log panel may use a strong dark surface because it is a distinct stream of machine output; do not apply that dark treatment broadly to the whole app.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do preserve the self-hosted, lightweight feel: Go templates, htmx flows, and server-rendered forms should remain first-class.",
+      "Do use restrained neutral surfaces, clear dividers, and one future primary accent for primary actions and active navigation.",
+      "Do make risky actions explicit: preview, confirm create, destroy preview, confirm destroy, retry, and drift detection need distinct copy and visual hierarchy.",
+      "Do give every interactive primitive hover, active, disabled, and visible focus states.",
+      "Do keep empty states useful: point users toward adding an account, creating a project, saving a blueprint, or deploying an environment.",
+      "Do keep log output visually distinct with the dark log surface and a readable text color."
+    ],
+    "donts": [
+      "Don't use marketing-style SaaS pages, oversized hero sections, decorative gradients, playful illustrations, or ornamental dashboards.",
+      "Don't use terminal-only aesthetics that make normal forms and tables feel hostile.",
+      "Don't copy AWS-console-level density where common actions become hard to scan.",
+      "Don't make destructive actions look identical to safe actions.",
+      "Don't rely on red or green for decoration; they are semantic state colors only.",
+      "Don't introduce custom scrollbars, unusual form controls, or modal-heavy flows for flavor."
+    ]
+  }
+}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -14,6 +15,33 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	for _, name := range []string{"login", "accounts", "projects", "blueprints", "environments", "environment_detail"} {
 		if r.pages[name] == nil {
 			t.Fatalf("page %q not parsed", name)
+		}
+	}
+}
+
+func TestStaticAppCSSIsEmbedded(t *testing.T) {
+	css, err := StaticFS.ReadFile("static/app.css")
+	if err != nil {
+		t.Fatalf("static app stylesheet must be embedded: %v", err)
+	}
+	for _, want := range []string{"tailwindcss", ".app-shell"} {
+		if !strings.Contains(string(css), want) {
+			t.Fatalf("static app stylesheet missing %q", want)
+		}
+	}
+}
+
+func TestRenderLayoutLoadsAppStylesheet(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	w := httptest.NewRecorder()
+	r.Render(w, "login", nil)
+	out := w.Body.String()
+	for _, want := range []string{`href="/static/app.css"`, `class="app-shell"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("layout output missing %q: %s", want, out)
 		}
 	}
 }

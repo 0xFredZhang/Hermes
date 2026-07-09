@@ -2,10 +2,10 @@
 {{range .}}
 <tr>
   <td>{{.Name}}</td><td>{{.Description}}</td>
-  <td><button hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除该项目?">删除</button></td>
+  <td><button class="button-danger" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除该项目?">删除</button></td>
 </tr>
 {{else}}
-<tr><td colspan="3" class="muted">暂无项目</td></tr>
+<tr><td colspan="3" class="empty-row">暂无项目，先创建一个项目作为蓝图分组。</td></tr>
 {{end}}
 {{end}}
 
@@ -14,65 +14,83 @@
 <tr>
   <td>{{.Name}}</td><td>{{.Params.Region}}</td><td>{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
   <td>
-    <form method="post" action="/blueprints/{{.ID}}/deploy" style="display:inline">
-      <input name="env_name" placeholder="环境名" required style="width:7rem">
-      <button type="submit">部署</button>
+    <form class="inline-form" method="post" action="/blueprints/{{.ID}}/deploy">
+      <input class="input-control" name="env_name" placeholder="环境名" required>
+      <button class="button-primary" type="submit">部署</button>
     </form>
-    <button hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除该蓝图?">删除</button>
+    <button class="button-danger" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除该蓝图?">删除</button>
   </td>
 </tr>
 {{else}}
-<tr><td colspan="4" class="muted">暂无蓝图</td></tr>
+<tr><td colspan="4" class="empty-row">暂无蓝图，填写上方表单保存一个可部署规格。</td></tr>
 {{end}}
 {{end}}
 
 {{define "env_status"}}
 <div id="status" hx-get="/environments/{{.Env.ID}}/status" hx-trigger="every 2s" hx-swap="outerHTML">
-  <p>状态:<strong>{{.Env.Status}}</strong></p>
+  <p class="status-line">状态:<strong class="status-value">{{.Env.Status}}</strong></p>
   {{if eq .Env.Status "preview_ready"}}
-    <p>预演:{{.Plan}}</p>
-    <form method="post" action="/environments/{{.Env.ID}}/up" style="display:inline"><button>确认创建</button></form>
-    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+    <p class="notice ok">预演:{{.Plan}}</p>
+    <div class="action-group">
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/up"><button class="button-primary">确认创建</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">销毁</button></form>
+    </div>
   {{else if eq .Env.Status "up"}}
-    <p class="ok">已就绪</p>
+    <p class="notice ok">已就绪</p>
+    <div class="output-grid">
     {{if or .PublicIPs .PublicDNS}}
-      <h4>EC2</h4>
-      {{if .PublicIPs}}<p>公网 IP:{{.PublicIPs}}</p>{{end}}
-      {{if .PublicDNS}}<p>公网 DNS:{{.PublicDNS}}</p>{{end}}
+      <section class="output-section">
+        <h4 class="output-title">EC2</h4>
+        {{if .PublicIPs}}<p class="output-line">公网 IP:{{.PublicIPs}}</p>{{end}}
+        {{if .PublicDNS}}<p class="output-line">公网 DNS:{{.PublicDNS}}</p>{{end}}
+      </section>
     {{end}}
     {{if or .VPCID .SubnetIDs}}
-      <h4>网络</h4>
-      {{if .VPCID}}<p>VPC:{{.VPCID}}</p>{{end}}
-      {{if .SubnetIDs}}<p>子网:{{.SubnetIDs}}</p>{{end}}
+      <section class="output-section">
+        <h4 class="output-title">网络</h4>
+        {{if .VPCID}}<p class="output-line">VPC:{{.VPCID}}</p>{{end}}
+        {{if .SubnetIDs}}<p class="output-line">子网:{{.SubnetIDs}}</p>{{end}}
+      </section>
     {{end}}
     {{if or .RDSEndpoint .RDSAddress}}
-      <h4>数据库</h4>
-      {{if .RDSEndpoint}}<p>Endpoint:{{.RDSEndpoint}}</p>{{end}}
-      {{if .RDSAddress}}<p>地址:{{.RDSAddress}}</p>{{end}}
-      {{if .RDSPort}}<p>端口:{{.RDSPort}}</p>{{end}}
-      {{if .RDSUsername}}<p>用户名:{{.RDSUsername}}</p>{{end}}
+      <section class="output-section">
+        <h4 class="output-title">数据库</h4>
+        {{if .RDSEndpoint}}<p class="output-line">Endpoint:{{.RDSEndpoint}}</p>{{end}}
+        {{if .RDSAddress}}<p class="output-line">地址:{{.RDSAddress}}</p>{{end}}
+        {{if .RDSPort}}<p class="output-line">端口:{{.RDSPort}}</p>{{end}}
+        {{if .RDSUsername}}<p class="output-line">用户名:{{.RDSUsername}}</p>{{end}}
+      </section>
     {{end}}
     {{if or .RedisEndpoint .RedisReader}}
-      <h4>Redis</h4>
-      {{if .RedisEndpoint}}<p>主 Endpoint:{{.RedisEndpoint}}</p>{{end}}
-      {{if .RedisReader}}<p>读 Endpoint:{{.RedisReader}}</p>{{end}}
-      {{if .RedisPort}}<p>端口:{{.RedisPort}}</p>{{end}}
+      <section class="output-section">
+        <h4 class="output-title">Redis</h4>
+        {{if .RedisEndpoint}}<p class="output-line">主 Endpoint:{{.RedisEndpoint}}</p>{{end}}
+        {{if .RedisReader}}<p class="output-line">读 Endpoint:{{.RedisReader}}</p>{{end}}
+        {{if .RedisPort}}<p class="output-line">端口:{{.RedisPort}}</p>{{end}}
+      </section>
     {{end}}
-    {{if .RefreshPlan}}<p>最近漂移检测:{{.RefreshPlan}}</p>{{end}}
-    <form method="post" action="/environments/{{.Env.ID}}/refresh" style="display:inline"><button>检测漂移</button></form>
-    <form method="post" action="/environments/{{.Env.ID}}/destroy-preview" style="display:inline"><button>预演销毁</button></form>
+    </div>
+    {{if .RefreshPlan}}<p class="status-line">最近漂移检测:{{.RefreshPlan}}</p>{{end}}
+    <div class="action-group">
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/refresh"><button>检测漂移</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
+    </div>
   {{else if eq .Env.Status "refreshing"}}
-    <p class="muted">正在检测漂移</p>
+    <p class="status-line">正在检测漂移</p>
   {{else if eq .Env.Status "destroy_preview_ready"}}
-    <p class="ok">销毁预演:{{.DestroyPlan}}</p>
-    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>确认销毁</button></form>
-    <form method="post" action="/environments/{{.Env.ID}}/cancel-destroy" style="display:inline"><button>保留资源</button></form>
+    <p class="notice ok">销毁预演:{{.DestroyPlan}}</p>
+    <div class="action-group">
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">确认销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/cancel-destroy"><button>保留资源</button></form>
+    </div>
   {{else if eq .Env.Status "failed"}}
-    <p class="err">失败</p>
-    <form method="post" action="/environments/{{.Env.ID}}/retry" style="display:inline"><button>重试</button></form>
-    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+    <p class="notice err">失败</p>
+    <div class="action-group">
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/retry"><button class="button-primary">重试</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">销毁</button></form>
+    </div>
   {{else if eq .Env.Status "destroyed"}}
-    <p class="muted">已销毁</p>
+    <p class="status-line">已销毁</p>
   {{end}}
 </div>
 {{end}}

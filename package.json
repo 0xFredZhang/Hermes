@@ -1,0 +1,12 @@
+{
+  "name": "hermes-console",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --minify",
+    "css:watch": "tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "tailwindcss": "^4.3.2"
+  }
+}

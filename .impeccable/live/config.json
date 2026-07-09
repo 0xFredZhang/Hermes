@@ -1,0 +1,6 @@
+{
+  "files": ["internal/web/templates/layout.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

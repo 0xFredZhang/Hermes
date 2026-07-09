@@ -4,30 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hermes</title>
+  <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js"></script>
-  <style>
-    body{font-family:system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}
-    nav a{margin-right:1rem}
-    table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.5rem;text-align:left}
-    input,select,button{padding:.4rem;margin:.2rem 0}
-    .err{color:#b00}.ok{color:#070}.muted{color:#777}
-    pre{background:#111;color:#eee;padding:.75rem;border-radius:6px;max-height:360px;overflow:auto}
-    fieldset label{display:block;margin:.3rem 0}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .htmx-indicator{opacity:0}
-    .htmx-request .htmx-indicator,.htmx-request.htmx-indicator{opacity:1}
-  </style>
 </head>
-<body>
-  <h1>Hermes</h1>
-  <nav>
-    <a href="/accounts">账号</a>
-    <a href="/projects">项目</a>
-    <a href="/blueprints">蓝图</a>
-    <a href="/environments">环境</a>
-    <form method="post" action="/logout" style="display:inline;float:right"><button>退出</button></form>
-  </nav>
-  <hr>
-  {{template "content" .}}
+<body class="app-shell">
+  <div class="app-frame">
+    <header class="app-header">
+      <div class="brand-block">
+        <h1 class="brand-title">Hermes</h1>
+        <p class="brand-subtitle">自托管 AWS 资源编排控制台</p>
+      </div>
+      <nav class="top-nav" aria-label="主导航">
+        <a class="nav-link" href="/accounts">账号</a>
+        <a class="nav-link" href="/projects">项目</a>
+        <a class="nav-link" href="/blueprints">蓝图</a>
+        <a class="nav-link" href="/environments">环境</a>
+        <form class="logout-form" method="post" action="/logout"><button class="button-muted">退出</button></form>
+      </nav>
+    </header>
+    <main class="app-main">
+      {{template "content" .}}
+    </main>
+  </div>
 </body>
 </html>{{end}}

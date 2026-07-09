@@ -1,13 +1,26 @@
 {{define "content"}}
-<h2>项目</h2>
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-<form hx-post="/projects" hx-target="#project-rows" hx-swap="innerHTML">
-  <input name="name" placeholder="项目名" required>
-  <input name="description" placeholder="描述(可选)">
-  <button type="submit">新建项目</button>
-</form>
-<table>
-  <thead><tr><th>名称</th><th>描述</th><th></th></tr></thead>
-  <tbody id="project-rows">{{template "project_rows" .Projects}}</tbody>
-</table>
+<section class="page-panel">
+  <div class="page-header">
+    <div>
+      <h2 class="page-title">项目</h2>
+      <p class="page-description">用项目把蓝图和环境分组，方便区分不同应用或阶段。</p>
+    </div>
+  </div>
+  {{if .Error}}<p class="notice err">{{.Error}}</p>{{end}}
+  <form class="form-row" hx-post="/projects" hx-target="#project-rows" hx-swap="innerHTML">
+    <label class="field">项目名
+      <input name="name" placeholder="api-service" required>
+    </label>
+    <label class="field">描述
+      <input name="description" placeholder="描述(可选)">
+    </label>
+    <button class="button-primary" type="submit">新建项目</button>
+  </form>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>名称</th><th>描述</th><th>操作</th></tr></thead>
+      <tbody id="project-rows">{{template "project_rows" .Projects}}</tbody>
+    </table>
+  </div>
+</section>
 {{end}}

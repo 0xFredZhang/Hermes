@@ -1,80 +1,100 @@
 {{define "content"}}
-<h2>蓝图</h2>
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-<form method="post" action="/blueprints">
-  <fieldset>
-    <legend>新建蓝图(安全组 + EC2)</legend>
-    <label>名称 <input name="name" required></label>
-    <label>项目 <select name="project_id" required>{{range .Projects}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
-    <label>云账号
-      <select name="cloud_account_id" required
-              hx-get="/blueprints/regions" hx-trigger="change, load"
-              hx-target="#region-select" hx-swap="innerHTML">
-        {{range .Accounts}}<option value="{{.ID}}">{{.Name}} ({{.AWSAccountID}})</option>{{end}}
-      </select>
-    </label>
-    <label>Region
-      <input type="search" class="select-search" data-filter-select="#region-select"
-             placeholder="搜索地区或代码" oninput="filterSelectOptions(this)">
-      <select name="region" id="region-select" required
-              hx-get="/blueprints/instance-types" hx-trigger="change"
-              hx-target="#instance-type-select" hx-swap="innerHTML"
-              hx-include="[name='cloud_account_id'],[name='region']"
-              hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
-        <option value="ap-southeast-1">亚太地区（新加坡） · ap-southeast-1</option>
-      </select>
-    </label>
-    <label>实例规格
-      <input type="search" class="select-search" data-filter-select="#instance-type-select"
-             placeholder="搜索规格 / CPU / 内存" oninput="filterSelectOptions(this)">
-      <select name="instance_type" id="instance-type-select" required
-              hx-get="/blueprints/amis" hx-trigger="change"
-              hx-target="#ami-select" hx-swap="innerHTML"
-              hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type']"
-              hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
-        <option value="t3.micro">t3.micro · 2C1G</option>
-      </select>
-    </label>
-    <label>数量 <input name="count" type="number" value="1" min="1" max="10" required></label>
-    <label>AMI
-      <select name="ami" id="ami-select">
-        <option value="">自动:最新 Ubuntu 26.04 LTS</option>
-      </select>
-    </label>
-    <label>系统盘 GB <input name="root_volume_gb" type="number" value="8" min="8" required></label>
-    <label>Key Pair(可选) <input name="key_name" placeholder="可选"></label>
-    <label>入站端口 <input name="ingress_port" type="number" value="22" required></label>
-    <label>协议 <select name="ingress_protocol"><option value="tcp">tcp</option><option value="udp">udp</option></select></label>
-    <label>来源 CIDR <input name="ingress_cidr" value="0.0.0.0/0" required></label>
-  </fieldset>
-  <fieldset>
-    <legend>可选网络(VPC)</legend>
-    <label><input name="network_enabled" type="checkbox"> 创建 Hermes VPC</label>
-    <label>VPC CIDR <input name="network_vpc_cidr" value="10.0.0.0/16"></label>
-    <label>公网子网 CIDR <input name="network_public_subnet_cidrs" value="10.0.1.0/24,10.0.2.0/24"></label>
-  </fieldset>
-  <fieldset>
-    <legend>可选数据库(MySQL)</legend>
-    <label><input name="rds_enabled" type="checkbox"> 启用 MySQL</label>
-    <label>版本 <input name="rds_engine_version" value="8.0"></label>
-    <label>规格 <input name="rds_instance_class" value="db.t3.micro"></label>
-    <label>存储 GB <input name="rds_allocated_storage_gb" type="number" value="20" min="20"></label>
-    <label>数据库名 <input name="rds_db_name" value="app"></label>
-    <label>用户名 <input name="rds_username" value="admin"></label>
-  </fieldset>
-  <fieldset>
-    <legend>可选缓存(Redis)</legend>
-    <label><input name="redis_enabled" type="checkbox"> 启用 Redis</label>
-    <label>版本 <input name="redis_engine_version" value="7.2"></label>
-    <label>规格 <input name="redis_node_type" value="cache.t3.micro"></label>
-    <label>节点数 <input name="redis_node_count" type="number" value="1" min="1" max="5"></label>
-  </fieldset>
-  <button type="submit">保存蓝图</button>
-</form>
-<table>
-  <thead><tr><th>名称</th><th>Region</th><th>规格×数量</th><th></th></tr></thead>
-  <tbody id="blueprint-rows">{{template "blueprint_rows" .Blueprints}}</tbody>
-</table>
+<section class="page-panel">
+  <div class="page-header">
+    <div>
+      <h2 class="page-title">蓝图</h2>
+      <p class="page-description">定义一套可复用的环境规格。保存后先部署为 preview，确认计划后再创建真实资源。</p>
+    </div>
+  </div>
+  {{if .Error}}<p class="notice err">{{.Error}}</p>{{end}}
+  <form method="post" action="/blueprints">
+    <fieldset class="field-group">
+      <legend class="field-legend">基础资源(安全组 + EC2)</legend>
+      <div class="form-grid">
+        <label class="field">名称 <input name="name" placeholder="web-dev" required></label>
+        <label class="field">项目 <select name="project_id" required>{{range .Projects}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+        <label class="field">云账号
+          <select name="cloud_account_id" required
+                  hx-get="/blueprints/regions" hx-trigger="change, load"
+                  hx-target="#region-select" hx-swap="innerHTML">
+            {{range .Accounts}}<option value="{{.ID}}">{{.Name}} ({{.AWSAccountID}})</option>{{end}}
+          </select>
+        </label>
+        <label class="field">Region
+          <input type="search" class="select-search" data-filter-select="#region-select"
+                 placeholder="搜索地区或代码" oninput="filterSelectOptions(this)">
+          <select name="region" id="region-select" required
+                  hx-get="/blueprints/instance-types" hx-trigger="change"
+                  hx-target="#instance-type-select" hx-swap="innerHTML"
+                  hx-include="[name='cloud_account_id'],[name='region']"
+                  hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
+            <option value="ap-southeast-1">亚太地区（新加坡） · ap-southeast-1</option>
+          </select>
+        </label>
+        <label class="field">实例规格
+          <input type="search" class="select-search" data-filter-select="#instance-type-select"
+                 placeholder="搜索规格 / CPU / 内存" oninput="filterSelectOptions(this)">
+          <select name="instance_type" id="instance-type-select" required
+                  hx-get="/blueprints/amis" hx-trigger="change"
+                  hx-target="#ami-select" hx-swap="innerHTML"
+                  hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type']"
+                  hx-on::after-swap="this.dispatchEvent(new Event('change', {bubbles:true}))">
+            <option value="t3.micro">t3.micro · 2C1G</option>
+          </select>
+        </label>
+        <label class="field">数量 <input name="count" type="number" value="1" min="1" max="10" required></label>
+        <label class="field">AMI
+          <select name="ami" id="ami-select">
+            <option value="">自动:最新 Ubuntu 26.04 LTS</option>
+          </select>
+        </label>
+        <label class="field">系统盘 GB <input name="root_volume_gb" type="number" value="8" min="8" required></label>
+        <label class="field">Key Pair(可选) <input name="key_name" placeholder="可选"></label>
+        <label class="field">入站端口 <input name="ingress_port" type="number" value="22" required></label>
+        <label class="field">协议 <select name="ingress_protocol"><option value="tcp">tcp</option><option value="udp">udp</option></select></label>
+        <label class="field">来源 CIDR <input name="ingress_cidr" value="0.0.0.0/0" required></label>
+      </div>
+    </fieldset>
+    <fieldset class="field-group">
+      <legend class="field-legend">可选网络(VPC)</legend>
+      <div class="form-grid">
+        <label class="field"><input name="network_enabled" type="checkbox"> 创建 Hermes VPC</label>
+        <label class="field">VPC CIDR <input name="network_vpc_cidr" value="10.0.0.0/16"></label>
+        <label class="field">公网子网 CIDR <input name="network_public_subnet_cidrs" value="10.0.1.0/24,10.0.2.0/24"></label>
+      </div>
+    </fieldset>
+    <fieldset class="field-group">
+      <legend class="field-legend">可选数据库(MySQL)</legend>
+      <div class="form-grid">
+        <label class="field"><input name="rds_enabled" type="checkbox"> 启用 MySQL</label>
+        <label class="field">版本 <input name="rds_engine_version" value="8.0"></label>
+        <label class="field">规格 <input name="rds_instance_class" value="db.t3.micro"></label>
+        <label class="field">存储 GB <input name="rds_allocated_storage_gb" type="number" value="20" min="20"></label>
+        <label class="field">数据库名 <input name="rds_db_name" value="app"></label>
+        <label class="field">用户名 <input name="rds_username" value="admin"></label>
+      </div>
+    </fieldset>
+    <fieldset class="field-group">
+      <legend class="field-legend">可选缓存(Redis)</legend>
+      <div class="form-grid">
+        <label class="field"><input name="redis_enabled" type="checkbox"> 启用 Redis</label>
+        <label class="field">版本 <input name="redis_engine_version" value="7.2"></label>
+        <label class="field">规格 <input name="redis_node_type" value="cache.t3.micro"></label>
+        <label class="field">节点数 <input name="redis_node_count" type="number" value="1" min="1" max="5"></label>
+      </div>
+    </fieldset>
+    <div class="action-group">
+      <button class="button-primary" type="submit">保存蓝图</button>
+    </div>
+  </form>
+  <h3 class="section-title">已保存蓝图</h3>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>名称</th><th>Region</th><th>规格×数量</th><th>操作</th></tr></thead>
+      <tbody id="blueprint-rows">{{template "blueprint_rows" .Blueprints}}</tbody>
+    </table>
+  </div>
+</section>
 <script>
 function filterSelectOptions(input) {
   var select = document.querySelector(input.dataset.filterSelect);

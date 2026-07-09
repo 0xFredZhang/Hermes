@@ -7,6 +7,7 @@ Hermes 是一个轻量的自托管 AWS 资源编排控制台。当前 MVP 支持
 ## 运行要求
 
 - Go 1.25+
+- Node.js / npm（仅用于重建 Tailwind 控制台样式）
 - SQLite（通过纯 Go 的 `modernc.org/sqlite` 驱动使用）
 - `PATH` 中可用的 Pulumi CLI
 - Pulumi AWS / Random provider plugins
@@ -39,6 +40,25 @@ make env
 - `HERMES_WORKERS`：provisioning worker 数量，默认 `2`。
 
 ## 开发
+
+首次安装前端样式构建依赖：
+
+```bash
+npm install
+```
+
+控制台样式使用 Tailwind CSS 编译。修改 `internal/web/assets/app.css` 或模板 class
+后，可以手动重建：
+
+```bash
+make css
+```
+
+开发样式时也可以开启 watch：
+
+```bash
+npm run css:watch
+```
 
 运行本地检查：
 

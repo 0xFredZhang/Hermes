@@ -1,16 +1,31 @@
 {{define "content"}}
-<h2>AWS 云账号</h2>
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-<form hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML"
-      hx-disabled-elt="find button" hx-indicator="#add-status">
-  <input name="name" placeholder="别名" required>
-  <input name="access_key_id" placeholder="Access Key ID" required>
-  <input name="secret_access_key" placeholder="Secret Access Key" required>
-  <button type="submit">添加并验证</button>
-  <span id="add-status" class="htmx-indicator">验证中…</span>
-</form>
-<table>
-  <thead><tr><th>别名</th><th>Account ID</th><th>ARN</th><th></th></tr></thead>
-  <tbody id="rows">{{template "rows" .Accounts}}</tbody>
-</table>
+<section class="page-panel">
+  <div class="page-header">
+    <div>
+      <h2 class="page-title">AWS 云账号</h2>
+      <p class="page-description">保存并验证 AWS 凭证。Secret Key 会加密落库，只在执行任务时解密使用。</p>
+    </div>
+  </div>
+  {{if .Error}}<p class="notice err">{{.Error}}</p>{{end}}
+  <form class="form-row" hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML"
+        hx-disabled-elt="find button" hx-indicator="#add-status">
+    <label class="field">别名
+      <input name="name" placeholder="prod-main" required>
+    </label>
+    <label class="field">Access Key ID
+      <input name="access_key_id" placeholder="AKIA..." required>
+    </label>
+    <label class="field">Secret Access Key
+      <input name="secret_access_key" placeholder="Secret Access Key" required>
+    </label>
+    <button class="button-primary" type="submit">添加并验证</button>
+    <span id="add-status" class="htmx-indicator status-line">验证中…</span>
+  </form>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>别名</th><th>Account ID</th><th>ARN</th><th>操作</th></tr></thead>
+      <tbody id="rows">{{template "rows" .Accounts}}</tbody>
+    </table>
+  </div>
+</section>
 {{end}}

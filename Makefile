@@ -11,12 +11,18 @@ BINARY := bin/hermes
 PKG    := ./cmd/hermes
 
 .DEFAULT_GOAL := help
-.PHONY: run build test vet fmt tidy gen-key env clean help setup-pulumi test-integration
+.PHONY: run build css css-watch test vet fmt tidy gen-key env clean help setup-pulumi test-integration
+
+css: ## Build the Tailwind console stylesheet
+	npm run css:build
+
+css-watch: ## Rebuild the Tailwind console stylesheet on template changes
+	npm run css:watch
 
 run: ## Load .env and start the server locally
 	go run $(PKG)
 
-build: ## Compile the binary to bin/hermes
+build: css ## Compile the binary to bin/hermes
 	go build -o $(BINARY) $(PKG)
 
 test: ## Run all tests

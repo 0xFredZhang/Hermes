@@ -1,14 +1,23 @@
 {{define "content"}}
-<h2>环境</h2>
-<table>
-  <thead><tr><th>ID</th><th>名称</th><th>Stack</th><th>Region</th><th>状态</th><th></th></tr></thead>
-  <tbody>
-  {{range .Environments}}
-    <tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.PulumiStack}}</td><td>{{.Region}}</td><td>{{.Status}}</td>
-        <td><a href="/environments/{{.ID}}">详情</a></td></tr>
-  {{else}}
-    <tr><td colspan="6" class="muted">暂无环境,去蓝图页部署一个</td></tr>
-  {{end}}
-  </tbody>
-</table>
+<section class="page-panel">
+  <div class="page-header">
+    <div>
+      <h2 class="page-title">环境</h2>
+      <p class="page-description">查看每个 Pulumi stack 的状态、输出、日志和销毁流程。</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>ID</th><th>名称</th><th>Stack</th><th>Region</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+      {{range .Environments}}
+        <tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.PulumiStack}}</td><td>{{.Region}}</td><td><span class="status-value">{{.Status}}</span></td>
+            <td><a href="/environments/{{.ID}}">详情</a></td></tr>
+      {{else}}
+        <tr><td colspan="6" class="empty-row">暂无环境，去蓝图页部署一个。</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
 {{end}}
