@@ -59,6 +59,10 @@
         {{if .RDSAddress}}<p class="output-line">地址:{{.RDSAddress}}</p>{{end}}
         {{if .RDSPort}}<p class="output-line">端口:{{.RDSPort}}</p>{{end}}
         {{if .RDSUsername}}<p class="output-line">用户名:{{.RDSUsername}}</p>{{end}}
+        {{if .HasRDSSecret}}
+          <div id="rds-credentials-{{.Env.ID}}"></div>
+          <button type="button" hx-post="/environments/{{.Env.ID}}/rds-credentials" hx-target="#rds-credentials-{{.Env.ID}}" hx-swap="innerHTML">显示凭据</button>
+        {{end}}
       </section>
     {{end}}
     {{if or .RedisEndpoint .RedisReader}}
@@ -92,5 +96,14 @@
   {{else if eq .Env.Status "destroyed"}}
     <p class="status-line">已销毁</p>
   {{end}}
+</div>
+{{end}}
+
+{{define "rds_credentials"}}
+<div class="notice ok">
+  {{if .Host}}<p class="output-line">地址:{{.Host}}</p>{{end}}
+  {{if .Port}}<p class="output-line">端口:{{.Port}}</p>{{end}}
+  <p class="output-line">用户名:{{.Username}}</p>
+  <p class="output-line">口令:{{.Password}}</p>
 </div>
 {{end}}

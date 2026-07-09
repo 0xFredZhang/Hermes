@@ -200,6 +200,10 @@ type AWSCreds struct {
 	SecretAccessKey string
 }
 
+type RuntimeSecrets struct {
+	RDSPassword string
+}
+
 // Spec is the per-execution input to a Provisioner. Process-level config
 // (backend URL, passphrase, pulumi project) lives on the implementation, not here.
 type Spec struct {
@@ -207,6 +211,7 @@ type Spec struct {
 	Region    string
 	Params    BlueprintParams
 	Creds     AWSCreds
+	Secrets   RuntimeSecrets
 }
 
 type PreviewResult struct {

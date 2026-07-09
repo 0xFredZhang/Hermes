@@ -41,7 +41,7 @@ func (p *Provisioner) envVars(spec provisioner.Spec) map[string]string {
 
 func (p *Provisioner) stack(ctx context.Context, spec provisioner.Spec) (auto.Stack, error) {
 	return auto.UpsertStackInlineSource(ctx, spec.StackName, p.project,
-		buildProgram(spec.Params), auto.EnvVars(p.envVars(spec)))
+		buildProgram(spec), auto.EnvVars(p.envVars(spec)))
 }
 
 func (p *Provisioner) Preview(ctx context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {

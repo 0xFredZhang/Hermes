@@ -12,14 +12,26 @@ import (
 )
 
 type recordMocks struct {
-	mu    sync.Mutex
-	types []string
-	calls []string
+	mu        sync.Mutex
+	types     []string
+	calls     []string
+	resources []resourceRecord
+}
+
+type resourceRecord struct {
+	typ  string
+	name string
+	raw  resource.PropertyMap
 }
 
 func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
 	m.mu.Lock()
 	m.types = append(m.types, args.TypeToken)
+	m.resources = append(m.resources, resourceRecord{
+		typ:  args.TypeToken,
+		name: args.Name,
+		raw:  args.Inputs,
+	})
 	m.mu.Unlock()
 	outputs := args.Inputs.Mappable()
 	if args.TypeToken == "aws:ec2/instance:Instance" {
@@ -83,7 +95,7 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 2, RootVolumeGB: 8},
 	}
 	m := &recordMocks{}
-	err := pulumi.RunErr(buildProgram(params), pulumi.WithMocks("hermes", "test", m))
+	err := pulumi.RunErr(buildProgram(provisioner.Spec{Params: params}), pulumi.WithMocks("hermes", "test", m))
 	if err != nil {
 		t.Fatalf("RunErr: %v", err)
 	}
@@ -159,7 +171,7 @@ func TestBuildProgramDeclaresManagedNetwork(t *testing.T) {
 	m := &recordMocks{}
 	var outputs map[string]any
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		if err := buildProgram(params)(ctx); err != nil {
+		if err := buildProgram(provisioner.Spec{Params: params})(ctx); err != nil {
 			return err
 		}
 		outputs = map[string]any{}
@@ -234,8 +246,12 @@ func TestBuildProgramDeclaresOptionalRDSAndRedis(t *testing.T) {
 	}
 	m := &recordMocks{}
 	var outputs map[string]any
+	const rdsPassword = "HermesStoredPassword123!"
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		if err := buildProgram(params)(ctx); err != nil {
+		if err := buildProgram(provisioner.Spec{
+			Params:  params,
+			Secrets: provisioner.RuntimeSecrets{RDSPassword: rdsPassword},
+		})(ctx); err != nil {
 			return err
 		}
 		outputs = map[string]any{}
@@ -263,11 +279,26 @@ func TestBuildProgramDeclaresOptionalRDSAndRedis(t *testing.T) {
 		"aws:elasticache/replicationGroup:ReplicationGroup": 1,
 		"aws:ec2/securityGroupRule:SecurityGroupRule":       2,
 		"aws:ec2/securityGroup:SecurityGroup":               3,
+		"random:index/randomPassword:RandomPassword":        0,
 	}
 	for tok, want := range wantCounts {
 		if got := count(tok); got != want {
 			t.Fatalf("%s = %d, want %d; all resources=%v", tok, got, want, m.types)
 		}
+	}
+	rdsInput, ok := resourceInputs(m.resources, "aws:rds/instance:Instance", "hermes-rds")
+	if !ok {
+		t.Fatalf("RDS instance inputs not recorded: %+v", m.resources)
+	}
+	passwordValue, ok := rdsInput.raw["password"]
+	if !ok {
+		t.Fatalf("RDS password input missing: %+v", rdsInput.raw)
+	}
+	if !passwordValue.ContainsSecrets() {
+		t.Fatalf("RDS password input must be marked secret: %v", passwordValue)
+	}
+	if got := passwordValue.SecretValue().Element.StringValue(); got != rdsPassword {
+		t.Fatalf("RDS password input = %q, want runtime secret password", got)
 	}
 	for _, key := range []string{
 		"rds_endpoint",
@@ -285,6 +316,44 @@ func TestBuildProgramDeclaresOptionalRDSAndRedis(t *testing.T) {
 	if outputs["rds_password"] != nil {
 		t.Fatalf("RDS password must not be exported: %+v", outputs)
 	}
+}
+
+func TestBuildProgramRequiresRuntimeRDSPassword(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		RDS: provisioner.RDS{Enabled: true},
+	}
+	m := &recordMocks{}
+	err := pulumi.RunErr(buildProgram(provisioner.Spec{Params: params}), pulumi.WithMocks("hermes", "test", m))
+	if err == nil || !strings.Contains(err.Error(), "rds password") {
+		t.Fatalf("RunErr err = %v, want missing rds password error", err)
+	}
+	if got := countResourceType(m.types, "random:index/randomPassword:RandomPassword"); got != 0 {
+		t.Fatalf("random password resources = %d, want 0", got)
+	}
+}
+
+func resourceInputs(records []resourceRecord, typ, name string) (resourceRecord, bool) {
+	for _, r := range records {
+		if r.typ == typ && r.name == name {
+			return r, true
+		}
+	}
+	return resourceRecord{}, false
+}
+
+func countResourceType(types []string, tok string) int {
+	n := 0
+	for _, x := range types {
+		if x == tok {
+			n++
+		}
+	}
+	return n
 }
 
 func TestResolveArch(t *testing.T) {

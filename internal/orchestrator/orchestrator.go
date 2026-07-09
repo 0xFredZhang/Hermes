@@ -130,6 +130,12 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 		Params:    env.Snapshot,
 		Creds:     provisioner.AWSCreds{AccessKeyID: acct.AccessKeyID, SecretAccessKey: acct.SecretAccessKey},
 	}
+	secrets, err := o.prepareRuntimeSecrets(ctx, env)
+	if err != nil {
+		o.fail(ctx, jobID, env.ID, logs, err)
+		return
+	}
+	spec.Secrets = secrets
 
 	switch job.Action {
 	case store.ActionPreview:
@@ -172,6 +178,10 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 			return
 		}
 		_ = o.store.SetEnvironmentOutputs(ctx, env.ID, res.Outputs)
+		if err := o.syncRDSSecretMetadata(ctx, env, res.Outputs); err != nil {
+			o.fail(ctx, jobID, env.ID, logs, err)
+			return
+		}
 		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvUp)
 	case store.ActionDestroy:
 		if err := o.prov.Destroy(ctx, spec, logs); err != nil {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -26,7 +27,7 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 			return
 		}
 		jobs, _ := d.Store.ListJobsByEnvironment(r.Context(), id)
-		d.Renderer.Render(w, "environment_detail", envViewData(env, jobs))
+		d.Renderer.Render(w, "environment_detail", envViewData(r.Context(), d, env, jobs))
 	})
 	mux.HandleFunc("GET /environments/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -37,11 +38,12 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 		}
 		jobs, _ := d.Store.ListJobsByEnvironment(r.Context(), id)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = d.Renderer.RenderPartial(w, "env_status", envViewData(env, jobs))
+		_ = d.Renderer.RenderPartial(w, "env_status", envViewData(r.Context(), d, env, jobs))
 	})
 	mux.HandleFunc("POST /environments/{id}/up", enqueueHandler(d, store.ActionUp))
 	mux.HandleFunc("POST /environments/{id}/retry", retryHandler(d))
 	mux.HandleFunc("POST /environments/{id}/refresh", enqueueHandler(d, store.ActionRefresh))
+	mux.HandleFunc("POST /environments/{id}/rds-credentials", revealRDSCredentialsHandler(d))
 	mux.HandleFunc("POST /environments/{id}/destroy-preview", enqueueHandler(d, store.ActionDestroyPreview))
 	mux.HandleFunc("POST /environments/{id}/cancel-destroy", cancelDestroyHandler(d))
 	mux.HandleFunc("POST /environments/{id}/destroy", destroyHandler(d))
@@ -95,10 +97,34 @@ func cancelDestroyHandler(d Deps) http.HandlerFunc {
 	}
 }
 
+func revealRDSCredentialsHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if env, err := d.Store.GetEnvironment(r.Context(), id); err != nil || env.Status != store.EnvUp {
+			http.Error(w, "RDS credentials are not available", http.StatusNotFound)
+			return
+		}
+		secret, err := d.Store.GetEnvironmentSecret(r.Context(), id, store.SecretRDSMySQL)
+		if err != nil {
+			http.Error(w, "RDS credentials are not available", http.StatusNotFound)
+			return
+		}
+		data := map[string]any{
+			"Username": secret.Username,
+			"Password": secret.Password,
+			"Host":     formatScalar(secret.Metadata["host"]),
+			"Port":     formatScalar(secret.Metadata["port"]),
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = d.Renderer.RenderPartial(w, "rds_credentials", data)
+	}
+}
+
 // envViewData is the template payload shared by the detail page and the status
 // fragment: the environment, the latest job id/logs (for the SSE pane), a
 // preview plan string, and a formatted public-IP list.
-func envViewData(env store.Environment, jobs []store.Job) map[string]any {
+func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []store.Job) map[string]any {
 	// Initialize every key the templates reference so missing values render as
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
@@ -108,6 +134,7 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 		"PublicIPs":   "", "PublicDNS": "",
 		"VPCID": "", "SubnetIDs": "",
 		"RDSEndpoint": "", "RDSAddress": "", "RDSPort": "", "RDSUsername": "",
+		"HasRDSSecret":  false,
 		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
 	}
 	if len(jobs) > 0 {
@@ -144,6 +171,11 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 		data["RedisEndpoint"] = formatScalar(env.Outputs["redis_primary_endpoint"])
 		data["RedisReader"] = formatScalar(env.Outputs["redis_reader_endpoint"])
 		data["RedisPort"] = formatScalar(env.Outputs["redis_port"])
+	}
+	if env.Status == store.EnvUp && data["RDSEndpoint"] != "" {
+		if has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRDSMySQL); err == nil {
+			data["HasRDSSecret"] = has
+		}
 	}
 	return data
 }

@@ -42,6 +42,7 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	}
 	if os.Getenv("HERMES_IT_RDS") != "" {
 		spec.Params.RDS.Enabled = true
+		spec.Secrets.RDSPassword = "HermesIntegrationPassword123!"
 	}
 	if os.Getenv("HERMES_IT_REDIS") != "" {
 		spec.Params.Redis.Enabled = true
@@ -87,7 +88,7 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	}
 	// The stack should no longer exist in the backend: selecting it must fail.
 	if _, err := auto.SelectStackInlineSource(ctx, spec.StackName, p.project,
-		buildProgram(spec.Params), auto.EnvVars(p.envVars(spec))); err == nil {
+		buildProgram(spec), auto.EnvVars(p.envVars(spec))); err == nil {
 		t.Errorf("stack %q still present after Destroy; RemoveStack did not run", spec.StackName)
 	}
 }

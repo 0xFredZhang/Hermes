@@ -18,9 +18,12 @@ type fakeProvisioner struct {
 	logLine            string
 	previewDestroyLine string
 	refreshLine        string
+	previewSpecs       []provisioner.Spec
+	upSpecs            []provisioner.Spec
 }
 
-func (f *fakeProvisioner) Preview(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+func (f *fakeProvisioner) Preview(_ context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+	f.previewSpecs = append(f.previewSpecs, spec)
 	if f.logLine != "" {
 		fmt.Fprintln(logs, f.logLine)
 	}
@@ -41,7 +44,8 @@ func (f *fakeProvisioner) Refresh(_ context.Context, _ provisioner.Spec, logs io
 	return provisioner.PreviewResult{Updates: 1, Sames: 3}, nil
 }
 
-func (f *fakeProvisioner) Up(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.UpResult, error) {
+func (f *fakeProvisioner) Up(_ context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.UpResult, error) {
+	f.upSpecs = append(f.upSpecs, spec)
 	if f.logLine != "" {
 		fmt.Fprintln(logs, f.logLine)
 	}
@@ -59,6 +63,12 @@ func (f *fakeProvisioner) Destroy(_ context.Context, _ provisioner.Spec, logs io
 }
 
 func newSeededStore(t *testing.T) (*store.Store, int64) {
+	t.Helper()
+	return newSeededStoreWithParams(t, provisioner.BlueprintParams{Region: "ap-southeast-1",
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8}})
+}
+
+func newSeededStoreWithParams(t *testing.T, params provisioner.BlueprintParams) (*store.Store, int64) {
 	t.Helper()
 	c, err := crypto.NewCipher(make([]byte, 32))
 	if err != nil {
@@ -80,13 +90,26 @@ func newSeededStore(t *testing.T) (*store.Store, int64) {
 	}
 	bpID, _ := st.CreateBlueprint(ctx, store.Blueprint{
 		ProjectID: pid, CloudAccountID: aid, Name: "bp",
-		Params: provisioner.BlueprintParams{Region: "ap-southeast-1",
-			EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8}},
+		Params: params,
 	})
 	envID, _ := st.CreateEnvironment(ctx, store.Environment{
 		BlueprintID: bpID, CloudAccountID: aid, Name: "e", PulumiStack: "e-1", Region: "ap-southeast-1",
+		Snapshot: params,
 	})
 	return st, envID
+}
+
+func rdsParams() provisioner.BlueprintParams {
+	p := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		RDS: provisioner.RDS{Enabled: true},
+	}
+	p.ApplyDefaults()
+	return p
 }
 
 func TestRunPreviewSucceeds(t *testing.T) {
@@ -107,6 +130,34 @@ func TestRunPreviewSucceeds(t *testing.T) {
 	env, _ := st.GetEnvironment(ctx, envID)
 	if env.Status != store.EnvPreviewReady {
 		t.Fatalf("env status = %q, want preview_ready", env.Status)
+	}
+}
+
+func TestRunPreviewWithRDSGeneratesAndStoresPassword(t *testing.T) {
+	st, envID := newSeededStoreWithParams(t, rdsParams())
+	ctx := context.Background()
+	prov := &fakeProvisioner{logLine: "previewing rds"}
+	o := New(st, prov, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionPreview})
+	o.run(ctx, jobID)
+
+	if len(prov.previewSpecs) != 1 {
+		t.Fatalf("preview specs = %d, want 1", len(prov.previewSpecs))
+	}
+	gotPassword := prov.previewSpecs[0].Secrets.RDSPassword
+	if len(gotPassword) != 24 {
+		t.Fatalf("runtime RDS password length = %d, want 24", len(gotPassword))
+	}
+	secret, err := st.GetEnvironmentSecret(ctx, envID, store.SecretRDSMySQL)
+	if err != nil {
+		t.Fatalf("GetEnvironmentSecret: %v", err)
+	}
+	if secret.Username != "admin" || secret.Password != gotPassword {
+		t.Fatalf("stored secret = %+v, want username admin and generated password", secret)
+	}
+	if secret.Metadata["db_name"] != "app" || secret.Metadata["port"] != float64(3306) {
+		t.Fatalf("stored metadata = %+v, want db_name/port", secret.Metadata)
 	}
 }
 
@@ -158,6 +209,51 @@ func TestRunRefreshSucceeds(t *testing.T) {
 	env, _ := st.GetEnvironment(ctx, envID)
 	if env.Status != store.EnvUp {
 		t.Fatalf("env status = %q, want up", env.Status)
+	}
+}
+
+func TestRunUpWithRDSReusesExistingPassword(t *testing.T) {
+	st, envID := newSeededStoreWithParams(t, rdsParams())
+	ctx := context.Background()
+	if err := st.UpsertEnvironmentSecret(ctx, store.EnvironmentSecret{
+		EnvironmentID: envID,
+		Kind:          store.SecretRDSMySQL,
+		Username:      "admin",
+		Password:      "existing-rds-password",
+		Metadata: map[string]any{
+			"db_name": "app",
+			"port":    float64(3306),
+		},
+	}); err != nil {
+		t.Fatalf("UpsertEnvironmentSecret: %v", err)
+	}
+	prov := &fakeProvisioner{
+		outputs: map[string]any{
+			"rds_endpoint": "db.example:3306",
+			"rds_address":  "db.example",
+			"rds_port":     float64(3306),
+		},
+	}
+	o := New(st, prov, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
+	o.run(ctx, jobID)
+
+	if len(prov.upSpecs) != 1 {
+		t.Fatalf("up specs = %d, want 1", len(prov.upSpecs))
+	}
+	if got := prov.upSpecs[0].Secrets.RDSPassword; got != "existing-rds-password" {
+		t.Fatalf("runtime RDS password = %q, want existing secret", got)
+	}
+	secret, err := st.GetEnvironmentSecret(ctx, envID, store.SecretRDSMySQL)
+	if err != nil {
+		t.Fatalf("GetEnvironmentSecret: %v", err)
+	}
+	if secret.Password != "existing-rds-password" {
+		t.Fatalf("stored password = %q, want unchanged existing secret", secret.Password)
+	}
+	if secret.Metadata["host"] != "db.example" || secret.Metadata["endpoint"] != "db.example:3306" {
+		t.Fatalf("stored metadata = %+v, want RDS endpoint details from outputs", secret.Metadata)
 	}
 }
 

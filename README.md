@@ -102,8 +102,15 @@ make run
 
 RDS/Redis 默认关闭。启用后使用低成本开发默认值：MySQL 8.0、
 `db.t3.micro`、20GB 存储；Redis 7.2、`cache.t3.micro`、1 节点。RDS
-master 密码由 Pulumi 自动生成并作为 secret 写入 Pulumi state，不会写入 Hermes
-环境 outputs，也不会在页面展示。
+master 密码由 Hermes 使用强随机数生成，和用户名一起加密保存在本地 SQLite
+`environment_secrets` 表中；Pulumi 创建 RDS 时只拿到运行时 secret 输入。密码不会写入
+Hermes 环境 outputs，也不会出现在常规状态轮询里；环境进入 `up` 后，可以在环境详情页按需
+点击“显示凭据”查看。当前 Redis 仍不启用 auth token，访问边界依赖 VPC 与安全组。
+
+Hermes 暂不接入 AWS Secrets Manager：本轮只解决开发/自用场景下的 MySQL 凭据保存与查看。
+如果后续需要自动轮换、跨服务读取、审计或托管密钥策略，再引入 Secrets Manager。
+如果使用的是 M3a 期间已创建的 RDS 环境，旧密码仍只存在于当时的 Pulumi state；
+建议先销毁重建，或后续单独做一次凭据导入/重置迁移。
 
 Hermes-managed VPC 默认关闭。启用后默认使用 `10.0.0.0/16`，创建
 `10.0.1.0/24` 与 `10.0.2.0/24` 两个公网子网。M3 仍面向开发/自用，不包含 NAT

@@ -10,7 +10,6 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
-	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
@@ -18,8 +17,9 @@ import (
 
 // buildProgram returns a Pulumi inline program declaring the blueprint's
 // network, security group, EC2 instances, and optional backing services.
-func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
+func buildProgram(spec provisioner.Spec) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
+		p := spec.Params
 		p.ApplyDefaults()
 		amiID := p.EC2.AMI
 		if amiID == "" {
@@ -75,7 +75,10 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		}
 
 		if p.RDS.Enabled {
-			if err := declareRDS(ctx, p.RDS, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput()); err != nil {
+			if spec.Secrets.RDSPassword == "" {
+				return fmt.Errorf("rds password is required when RDS is enabled")
+			}
+			if err := declareRDS(ctx, p.RDS, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput(), spec.Secrets.RDSPassword); err != nil {
 				return err
 			}
 		}
@@ -238,7 +241,7 @@ func declareManagedNetwork(ctx *pulumi.Context, cfg provisioner.Network) (networ
 	}, nil
 }
 
-func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput, password string) error {
 	dbSG, err := ec2.NewSecurityGroup(ctx, "hermes-rds-sg", &ec2.SecurityGroupArgs{
 		VpcId: vpcID,
 		Egress: ec2.SecurityGroupEgressArray{
@@ -272,14 +275,6 @@ func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInp
 	if err != nil {
 		return err
 	}
-	password, err := random.NewRandomPassword(ctx, "hermes-rds-password", &random.RandomPasswordArgs{
-		Length:          pulumi.Int(24),
-		Special:         pulumi.Bool(true),
-		OverrideSpecial: pulumi.String("!#$%&*()-_=+[]{}<>:?"),
-	})
-	if err != nil {
-		return err
-	}
 	db, err := rds.NewInstance(ctx, "hermes-rds", &rds.InstanceArgs{
 		AllocatedStorage:    pulumi.Int(cfg.AllocatedStorageGB),
 		DbName:              pulumi.String(cfg.DBName),
@@ -288,7 +283,7 @@ func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInp
 		Engine:              pulumi.String(cfg.Engine),
 		EngineVersion:       pulumi.String(cfg.EngineVersion),
 		InstanceClass:       pulumi.String(cfg.InstanceClass),
-		Password:            password.Result,
+		Password:            pulumi.ToSecret(pulumi.String(password)).(pulumi.StringOutput).ToStringPtrOutput(),
 		Port:                pulumi.Int(cfg.Port),
 		PubliclyAccessible:  pulumi.Bool(false),
 		SkipFinalSnapshot:   pulumi.Bool(true),
