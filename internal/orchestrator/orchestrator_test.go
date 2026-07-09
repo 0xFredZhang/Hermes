@@ -13,9 +13,11 @@ import (
 )
 
 type fakeProvisioner struct {
-	upErr   error
-	outputs map[string]any
-	logLine string
+	upErr              error
+	outputs            map[string]any
+	logLine            string
+	previewDestroyLine string
+	refreshLine        string
 }
 
 func (f *fakeProvisioner) Preview(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
@@ -23,6 +25,20 @@ func (f *fakeProvisioner) Preview(_ context.Context, _ provisioner.Spec, logs io
 		fmt.Fprintln(logs, f.logLine)
 	}
 	return provisioner.PreviewResult{Creates: 3}, nil
+}
+
+func (f *fakeProvisioner) PreviewDestroy(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+	if f.previewDestroyLine != "" {
+		fmt.Fprintln(logs, f.previewDestroyLine)
+	}
+	return provisioner.PreviewResult{Deletes: 2}, nil
+}
+
+func (f *fakeProvisioner) Refresh(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+	if f.refreshLine != "" {
+		fmt.Fprintln(logs, f.refreshLine)
+	}
+	return provisioner.PreviewResult{Updates: 1, Sames: 3}, nil
 }
 
 func (f *fakeProvisioner) Up(_ context.Context, _ provisioner.Spec, logs io.Writer) (provisioner.UpResult, error) {
@@ -91,6 +107,57 @@ func TestRunPreviewSucceeds(t *testing.T) {
 	env, _ := st.GetEnvironment(ctx, envID)
 	if env.Status != store.EnvPreviewReady {
 		t.Fatalf("env status = %q, want preview_ready", env.Status)
+	}
+}
+
+func TestRunDestroyPreviewSucceeds(t *testing.T) {
+	st, envID := newSeededStore(t)
+	ctx := context.Background()
+	o := New(st, &fakeProvisioner{previewDestroyLine: "preview destroy"}, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionDestroyPreview})
+	o.run(ctx, jobID)
+
+	job, _ := st.GetJob(ctx, jobID)
+	if job.Status != store.JobSucceeded {
+		t.Fatalf("job status = %q, want succeeded", job.Status)
+	}
+	if job.Summary["deletes"] != float64(2) && job.Summary["deletes"] != 2 {
+		t.Fatalf("delete summary not stored: %+v", job.Summary)
+	}
+	if !strings.Contains(job.Logs, "preview destroy") {
+		t.Fatalf("logs not persisted: %q", job.Logs)
+	}
+	env, _ := st.GetEnvironment(ctx, envID)
+	if env.Status != store.EnvDestroyPreviewReady {
+		t.Fatalf("env status = %q, want destroy_preview_ready", env.Status)
+	}
+}
+
+func TestRunRefreshSucceeds(t *testing.T) {
+	st, envID := newSeededStore(t)
+	ctx := context.Background()
+	o := New(st, &fakeProvisioner{refreshLine: "refreshing"}, NewBroker(), 1)
+
+	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionRefresh})
+	o.run(ctx, jobID)
+
+	job, _ := st.GetJob(ctx, jobID)
+	if job.Status != store.JobSucceeded {
+		t.Fatalf("job status = %q, want succeeded", job.Status)
+	}
+	if job.Summary["updates"] != float64(1) && job.Summary["updates"] != 1 {
+		t.Fatalf("update summary not stored: %+v", job.Summary)
+	}
+	if job.Summary["sames"] != float64(3) && job.Summary["sames"] != 3 {
+		t.Fatalf("same summary not stored: %+v", job.Summary)
+	}
+	if !strings.Contains(job.Logs, "refreshing") {
+		t.Fatalf("logs not persisted: %q", job.Logs)
+	}
+	env, _ := st.GetEnvironment(ctx, envID)
+	if env.Status != store.EnvUp {
+		t.Fatalf("env status = %q, want up", env.Status)
 	}
 }
 

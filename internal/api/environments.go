@@ -41,7 +41,10 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 	})
 	mux.HandleFunc("POST /environments/{id}/up", enqueueHandler(d, store.ActionUp))
 	mux.HandleFunc("POST /environments/{id}/retry", retryHandler(d))
-	mux.HandleFunc("POST /environments/{id}/destroy", enqueueHandler(d, store.ActionDestroy))
+	mux.HandleFunc("POST /environments/{id}/refresh", enqueueHandler(d, store.ActionRefresh))
+	mux.HandleFunc("POST /environments/{id}/destroy-preview", enqueueHandler(d, store.ActionDestroyPreview))
+	mux.HandleFunc("POST /environments/{id}/cancel-destroy", cancelDestroyHandler(d))
+	mux.HandleFunc("POST /environments/{id}/destroy", destroyHandler(d))
 }
 
 // retryHandler re-runs the action that actually failed, rather than always
@@ -69,6 +72,29 @@ func enqueueHandler(d Deps, action string) http.HandlerFunc {
 	}
 }
 
+func destroyHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		env, err := d.Store.GetEnvironment(r.Context(), id)
+		if err == nil && env.Status == store.EnvUp {
+			http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+			return
+		}
+		_, _ = d.Orchestrator.Enqueue(r.Context(), id, store.ActionDestroy)
+		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	}
+}
+
+func cancelDestroyHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if env, err := d.Store.GetEnvironment(r.Context(), id); err == nil && env.Status == store.EnvDestroyPreviewReady {
+			_ = d.Store.UpdateEnvironmentStatus(r.Context(), id, store.EnvUp)
+		}
+		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	}
+}
+
 // envViewData is the template payload shared by the detail page and the status
 // fragment: the environment, the latest job id/logs (for the SSE pane), a
 // preview plan string, and a formatted public-IP list.
@@ -77,7 +103,9 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
 		"Env": env, "CurrentJobID": int64(0), "CurrentLogs": "", "Plan": "",
-		"PublicIPs": "", "PublicDNS": "",
+		"DestroyPlan": "",
+		"RefreshPlan": "",
+		"PublicIPs":   "", "PublicDNS": "",
 		"VPCID": "", "SubnetIDs": "",
 		"RDSEndpoint": "", "RDSAddress": "", "RDSPort": "", "RDSUsername": "",
 		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
@@ -89,6 +117,18 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	for _, j := range jobs {
 		if j.Action == store.ActionPreview && j.Summary != nil {
 			data["Plan"] = fmt.Sprintf("%v 个待创建", j.Summary["creates"])
+			break
+		}
+	}
+	for _, j := range jobs {
+		if j.Action == store.ActionDestroyPreview && j.Summary != nil {
+			data["DestroyPlan"] = fmt.Sprintf("%v 个待删除", j.Summary["deletes"])
+			break
+		}
+	}
+	for _, j := range jobs {
+		if j.Action == store.ActionRefresh && j.Summary != nil {
+			data["RefreshPlan"] = formatChangeSummary(j.Summary)
 			break
 		}
 	}
@@ -125,4 +165,9 @@ func formatScalar(v any) string {
 		return ""
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+func formatChangeSummary(summary map[string]any) string {
+	return fmt.Sprintf("%v 创建 / %v 更新 / %v 删除 / %v 不变",
+		summary["creates"], summary["updates"], summary["deletes"], summary["sames"])
 }

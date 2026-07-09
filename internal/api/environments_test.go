@@ -37,6 +37,82 @@ func TestEnvironmentUpEnqueuesJob(t *testing.T) {
 	}
 }
 
+func TestEnvironmentDestroyPreviewEnqueuesJob(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	_ = d.Store.UpdateEnvironmentStatus(context.Background(), envID, store.EnvUp)
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/destroy-preview", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	if len(jobs) != 1 || jobs[0].Action != store.ActionDestroyPreview {
+		t.Fatalf("destroy preview job not enqueued: %+v", jobs)
+	}
+}
+
+func TestEnvironmentRefreshEnqueuesJob(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	_ = d.Store.UpdateEnvironmentStatus(context.Background(), envID, store.EnvUp)
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/refresh", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	if len(jobs) != 1 || jobs[0].Action != store.ActionRefresh {
+		t.Fatalf("refresh job not enqueued: %+v", jobs)
+	}
+}
+
+func TestEnvironmentDestroyRequiresPreviewWhenUp(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvUp)
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/destroy", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	if len(jobs) != 0 {
+		t.Fatalf("direct destroy from up should not enqueue before preview: %+v", jobs)
+	}
+
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvDestroyPreviewReady)
+	rec = authedPost(t, d, "/environments/"+itoa(envID)+"/destroy", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	jobs, _ = d.Store.ListJobsByEnvironment(ctx, envID)
+	if len(jobs) != 1 || jobs[0].Action != store.ActionDestroy {
+		t.Fatalf("confirmed destroy not enqueued: %+v", jobs)
+	}
+}
+
+func TestCancelDestroyPreviewReturnsEnvironmentToUp(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvDestroyPreviewReady)
+
+	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/cancel-destroy", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	env, _ := d.Store.GetEnvironment(ctx, envID)
+	if env.Status != store.EnvUp {
+		t.Fatalf("env status = %q, want up", env.Status)
+	}
+	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	if len(jobs) != 0 {
+		t.Fatalf("cancel destroy preview should not enqueue a job: %+v", jobs)
+	}
+}
+
 func TestRetryReusesFailedAction(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	envID := seedEnv(t, d)
@@ -108,5 +184,53 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 	}
 	if strings.Contains(body, "password") || strings.Contains(body, "密码") {
 		t.Fatalf("status fragment must not expose generated DB password: %s", body)
+	}
+}
+
+func TestEnvironmentStatusFragmentShowsDestroyPreviewGate(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvUp)
+
+	rec := authedGet(t, d, "/environments/"+itoa(envID)+"/status")
+	body := rec.Body.String()
+	if !strings.Contains(body, "/destroy-preview") || !strings.Contains(body, "预演销毁") {
+		t.Fatalf("up status should show destroy preview action: %s", body)
+	}
+	if strings.Contains(body, `action="/environments/`+itoa(envID)+`/destroy"`) {
+		t.Fatalf("up status must not expose direct destroy action before preview: %s", body)
+	}
+
+	jobID, _ := d.Store.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionDestroyPreview})
+	_ = d.Store.SetJobSummary(ctx, jobID, map[string]any{"deletes": 4})
+	_ = d.Store.UpdateJobStatus(ctx, jobID, store.JobSucceeded)
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvDestroyPreviewReady)
+
+	rec = authedGet(t, d, "/environments/"+itoa(envID)+"/status")
+	body = rec.Body.String()
+	for _, want := range []string{"销毁预演", "4 个待删除", "确认销毁", "保留资源", `action="/environments/` + itoa(envID) + `/destroy"`, `action="/environments/` + itoa(envID) + `/cancel-destroy"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("destroy preview ready status missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestEnvironmentStatusFragmentShowsRefreshActionAndSummary(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvUp)
+
+	jobID, _ := d.Store.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionRefresh})
+	_ = d.Store.SetJobSummary(ctx, jobID, map[string]any{"creates": 0, "updates": 2, "deletes": 1, "sames": 4})
+	_ = d.Store.UpdateJobStatus(ctx, jobID, store.JobSucceeded)
+
+	rec := authedGet(t, d, "/environments/"+itoa(envID)+"/status")
+	body := rec.Body.String()
+	for _, want := range []string{"检测漂移", `action="/environments/` + itoa(envID) + `/refresh"`, "最近漂移检测", "0 创建 / 2 更新 / 1 删除 / 4 不变"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("refresh status missing %q: %s", want, body)
+		}
 	}
 }

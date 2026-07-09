@@ -20,6 +20,12 @@ type stubProvisioner struct{}
 func (stubProvisioner) Preview(_ context.Context, _ provisioner.Spec, _ io.Writer) (provisioner.PreviewResult, error) {
 	return provisioner.PreviewResult{Creates: 1}, nil
 }
+func (stubProvisioner) PreviewDestroy(_ context.Context, _ provisioner.Spec, _ io.Writer) (provisioner.PreviewResult, error) {
+	return provisioner.PreviewResult{Deletes: 1}, nil
+}
+func (stubProvisioner) Refresh(_ context.Context, _ provisioner.Spec, _ io.Writer) (provisioner.PreviewResult, error) {
+	return provisioner.PreviewResult{Updates: 1}, nil
+}
 func (stubProvisioner) Up(_ context.Context, _ provisioner.Spec, _ io.Writer) (provisioner.UpResult, error) {
 	return provisioner.UpResult{Outputs: map[string]any{"public_ips": []any{"1.2.3.4"}}}, nil
 }

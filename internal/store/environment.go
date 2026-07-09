@@ -9,14 +9,16 @@ import (
 )
 
 const (
-	EnvPending      = "pending"
-	EnvPreviewing   = "previewing"
-	EnvPreviewReady = "preview_ready"
-	EnvProvisioning = "provisioning"
-	EnvUp           = "up"
-	EnvFailed       = "failed"
-	EnvDestroying   = "destroying"
-	EnvDestroyed    = "destroyed"
+	EnvPending             = "pending"
+	EnvPreviewing          = "previewing"
+	EnvPreviewReady        = "preview_ready"
+	EnvProvisioning        = "provisioning"
+	EnvUp                  = "up"
+	EnvRefreshing          = "refreshing"
+	EnvDestroyPreviewReady = "destroy_preview_ready"
+	EnvFailed              = "failed"
+	EnvDestroying          = "destroying"
+	EnvDestroyed           = "destroyed"
 )
 
 type Environment struct {

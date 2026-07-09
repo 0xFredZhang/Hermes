@@ -8,6 +8,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optdestroy"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optpreview"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto/optrefresh"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 
@@ -52,15 +53,31 @@ func (p *Provisioner) Preview(ctx context.Context, spec provisioner.Spec, logs i
 	if err != nil {
 		return provisioner.PreviewResult{}, err
 	}
-	cs := res.ChangeSummary
-	return provisioner.PreviewResult{
-		Creates: cs[apitype.OpCreate],
-		Updates: cs[apitype.OpUpdate],
-		Deletes: cs[apitype.OpDelete],
-		Sames:   cs[apitype.OpSame],
-		Summary: fmt.Sprintf("%d to create, %d to update, %d to delete",
-			cs[apitype.OpCreate], cs[apitype.OpUpdate], cs[apitype.OpDelete]),
-	}, nil
+	return previewResultFromOps(res.ChangeSummary), nil
+}
+
+func (p *Provisioner) PreviewDestroy(ctx context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+	st, err := p.stack(ctx, spec)
+	if err != nil {
+		return provisioner.PreviewResult{}, err
+	}
+	res, err := st.PreviewDestroy(ctx, optdestroy.ProgressStreams(logs))
+	if err != nil {
+		return provisioner.PreviewResult{}, err
+	}
+	return previewResultFromOps(res.ChangeSummary), nil
+}
+
+func (p *Provisioner) Refresh(ctx context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.PreviewResult, error) {
+	st, err := p.stack(ctx, spec)
+	if err != nil {
+		return provisioner.PreviewResult{}, err
+	}
+	res, err := st.Refresh(ctx, optrefresh.ProgressStreams(logs))
+	if err != nil {
+		return provisioner.PreviewResult{}, err
+	}
+	return previewResultFromStringOps(res.Summary.ResourceChanges), nil
 }
 
 func (p *Provisioner) Up(ctx context.Context, spec provisioner.Spec, logs io.Writer) (provisioner.UpResult, error) {
@@ -94,4 +111,25 @@ func (p *Provisioner) Destroy(ctx context.Context, spec provisioner.Spec, logs i
 		fmt.Fprintf(logs, "note: could not remove empty stack %q from backend: %v\n", st.Name(), err)
 	}
 	return nil
+}
+
+func previewResultFromOps(cs map[apitype.OpType]int) provisioner.PreviewResult {
+	return provisioner.PreviewResult{
+		Creates: cs[apitype.OpCreate],
+		Updates: cs[apitype.OpUpdate],
+		Deletes: cs[apitype.OpDelete],
+		Sames:   cs[apitype.OpSame],
+		Summary: fmt.Sprintf("%d to create, %d to update, %d to delete",
+			cs[apitype.OpCreate], cs[apitype.OpUpdate], cs[apitype.OpDelete]),
+	}
+}
+
+func previewResultFromStringOps(cs *map[string]int) provisioner.PreviewResult {
+	ops := map[apitype.OpType]int{}
+	if cs != nil {
+		for op, count := range *cs {
+			ops[apitype.OpType(op)] = count
+		}
+	}
+	return previewResultFromOps(ops)
 }

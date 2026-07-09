@@ -143,6 +143,28 @@ func (o *Orchestrator) run(ctx context.Context, jobID int64) {
 			"deletes": res.Deletes, "sames": res.Sames,
 		})
 		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvPreviewReady)
+	case store.ActionDestroyPreview:
+		res, err := o.prov.PreviewDestroy(ctx, spec, logs)
+		if err != nil {
+			o.fail(ctx, jobID, env.ID, logs, err)
+			return
+		}
+		_ = o.store.SetJobSummary(ctx, jobID, map[string]any{
+			"creates": res.Creates, "updates": res.Updates,
+			"deletes": res.Deletes, "sames": res.Sames,
+		})
+		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvDestroyPreviewReady)
+	case store.ActionRefresh:
+		res, err := o.prov.Refresh(ctx, spec, logs)
+		if err != nil {
+			o.fail(ctx, jobID, env.ID, logs, err)
+			return
+		}
+		_ = o.store.SetJobSummary(ctx, jobID, map[string]any{
+			"creates": res.Creates, "updates": res.Updates,
+			"deletes": res.Deletes, "sames": res.Sames,
+		})
+		_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvUp)
 	case store.ActionUp:
 		res, err := o.prov.Up(ctx, spec, logs)
 		if err != nil {
@@ -166,6 +188,10 @@ func transientStatus(action string) string {
 	switch action {
 	case store.ActionPreview:
 		return store.EnvPreviewing
+	case store.ActionDestroyPreview:
+		return store.EnvPreviewing
+	case store.ActionRefresh:
+		return store.EnvRefreshing
 	case store.ActionDestroy:
 		return store.EnvDestroying
 	default:
@@ -200,7 +226,7 @@ func (o *Orchestrator) recoverOrphans(ctx context.Context) {
 			continue
 		}
 		switch env.Status {
-		case store.EnvPreviewing, store.EnvProvisioning, store.EnvDestroying:
+		case store.EnvPreviewing, store.EnvProvisioning, store.EnvRefreshing, store.EnvDestroying:
 			_ = o.store.UpdateEnvironmentStatus(ctx, env.ID, store.EnvFailed)
 		}
 	}

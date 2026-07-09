@@ -70,3 +70,60 @@ func TestRenderPartialEnvStatusRichOutputs(t *testing.T) {
 		t.Fatalf("env_status must not render DB password: %s", out)
 	}
 }
+
+func TestRenderPartialEnvStatusDestroyPreviewGate(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	var b bytes.Buffer
+	data := map[string]any{
+		"Env": map[string]any{"ID": int64(1), "Status": "up"},
+	}
+	if err := r.RenderPartial(&b, "env_status", data); err != nil {
+		t.Fatalf("RenderPartial: %v", err)
+	}
+	out := b.String()
+	if !strings.Contains(out, "/destroy-preview") || !strings.Contains(out, "预演销毁") {
+		t.Fatalf("env_status(up) missing destroy preview action: %s", out)
+	}
+	if strings.Contains(out, `action="/environments/1/destroy"`) {
+		t.Fatalf("env_status(up) must not expose direct destroy: %s", out)
+	}
+
+	b.Reset()
+	data = map[string]any{
+		"Env":         map[string]any{"ID": int64(1), "Status": "destroy_preview_ready"},
+		"DestroyPlan": "2 个待删除",
+	}
+	if err := r.RenderPartial(&b, "env_status", data); err != nil {
+		t.Fatalf("RenderPartial: %v", err)
+	}
+	out = b.String()
+	for _, want := range []string{"销毁预演", "2 个待删除", "确认销毁", "保留资源", `action="/environments/1/destroy"`, `action="/environments/1/cancel-destroy"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("env_status(destroy_preview_ready) missing %q: %s", want, out)
+		}
+	}
+}
+
+func TestRenderPartialEnvStatusRefreshActionAndSummary(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	var b bytes.Buffer
+	data := map[string]any{
+		"Env":         map[string]any{"ID": int64(1), "Status": "up"},
+		"RefreshPlan": "0 创建 / 2 更新 / 1 删除 / 4 不变",
+	}
+	if err := r.RenderPartial(&b, "env_status", data); err != nil {
+		t.Fatalf("RenderPartial: %v", err)
+	}
+	out := b.String()
+	for _, want := range []string{"检测漂移", "最近漂移检测", "0 创建 / 2 更新 / 1 删除 / 4 不变", `action="/environments/1/refresh"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("env_status(up) missing refresh item %q: %s", want, out)
+		}
+	}
+}

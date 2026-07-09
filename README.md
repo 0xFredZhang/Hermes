@@ -65,7 +65,8 @@ make run
 6. 查看 preview job。
 7. 确认执行 provisioning。
 8. 查看实时日志，直到环境进入 `up` 状态。
-9. 使用完毕后销毁环境。
+9. 可按需执行漂移检测，让 Pulumi refresh 采纳云端真实状态。
+10. 使用完毕后先执行销毁预演，确认待删除资源后再销毁环境。
 
 当前蓝图会创建：
 
@@ -87,6 +88,11 @@ Hermes-managed VPC 默认关闭。启用后默认使用 `10.0.0.0/16`，创建
 `10.0.1.0/24` 与 `10.0.2.0/24` 两个公网子网。M3 仍面向开发/自用，不包含 NAT
 Gateway、私有子网或生产级高可用拓扑。
 
+环境进入 `up` 后，Hermes 会要求先运行 destroy preview，再显示“确认销毁”按钮。
+如果预演后决定保留资源，可以取消销毁预演并回到 `up` 状态。
+环境详情页也提供“检测漂移”动作；它会调用 Pulumi refresh，对比 stack state 与云端
+实际资源，并把 refresh 后的资源变更摘要展示在页面上。
+
 ## AWS 权限提示
 
 除 EC2 实例、安全组、EIP 与只读目录查询权限外，启用自建 VPC 或可选资源还需要
@@ -102,6 +108,11 @@ Gateway、私有子网或生产级高可用拓扑。
 - `elasticache:CreateReplicationGroup`、`elasticache:DeleteReplicationGroup`、
   `elasticache:CreateCacheSubnetGroup`、`elasticache:DeleteCacheSubnetGroup`、
   `elasticache:DescribeReplicationGroups`。
+
+销毁预演会调用 Pulumi 的 destroy preview，同样需要读取当前 stack state 和描述目标
+资源的权限。
+漂移检测会调用 Pulumi refresh，需要读取当前 stack state、描述云端资源，并把刷新后
+的 state 写回当前 Pulumi backend。
 
 如果 `HERMES_PULUMI_BACKEND` 使用 `s3://...`，运行 Hermes 的身份还需要访问该
 bucket 的权限，例如 `s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、

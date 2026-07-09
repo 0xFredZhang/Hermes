@@ -58,7 +58,15 @@
       {{if .RedisReader}}<p>读 Endpoint:{{.RedisReader}}</p>{{end}}
       {{if .RedisPort}}<p>端口:{{.RedisPort}}</p>{{end}}
     {{end}}
-    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
+    {{if .RefreshPlan}}<p>最近漂移检测:{{.RefreshPlan}}</p>{{end}}
+    <form method="post" action="/environments/{{.Env.ID}}/refresh" style="display:inline"><button>检测漂移</button></form>
+    <form method="post" action="/environments/{{.Env.ID}}/destroy-preview" style="display:inline"><button>预演销毁</button></form>
+  {{else if eq .Env.Status "refreshing"}}
+    <p class="muted">正在检测漂移</p>
+  {{else if eq .Env.Status "destroy_preview_ready"}}
+    <p class="ok">销毁预演:{{.DestroyPlan}}</p>
+    <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>确认销毁</button></form>
+    <form method="post" action="/environments/{{.Env.ID}}/cancel-destroy" style="display:inline"><button>保留资源</button></form>
   {{else if eq .Env.Status "failed"}}
     <p class="err">失败</p>
     <form method="post" action="/environments/{{.Env.ID}}/retry" style="display:inline"><button>重试</button></form>

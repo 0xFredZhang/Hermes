@@ -13,9 +13,11 @@ const (
 	JobSucceeded = "succeeded"
 	JobFailed    = "failed"
 
-	ActionPreview = "preview"
-	ActionUp      = "up"
-	ActionDestroy = "destroy"
+	ActionPreview        = "preview"
+	ActionUp             = "up"
+	ActionRefresh        = "refresh"
+	ActionDestroyPreview = "destroy_preview"
+	ActionDestroy        = "destroy"
 )
 
 type Job struct {

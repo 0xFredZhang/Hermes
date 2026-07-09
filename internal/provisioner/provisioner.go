@@ -223,6 +223,8 @@ type UpResult struct {
 // logs receives streaming output (wired to the SSE broker).
 type Provisioner interface {
 	Preview(ctx context.Context, spec Spec, logs io.Writer) (PreviewResult, error)
+	PreviewDestroy(ctx context.Context, spec Spec, logs io.Writer) (PreviewResult, error)
+	Refresh(ctx context.Context, spec Spec, logs io.Writer) (PreviewResult, error)
 	Up(ctx context.Context, spec Spec, logs io.Writer) (UpResult, error)
 	Destroy(ctx context.Context, spec Spec, logs io.Writer) error
 }
