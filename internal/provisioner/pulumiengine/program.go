@@ -7,6 +7,9 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticache"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
+	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
@@ -16,6 +19,7 @@ import (
 // security group and EC2 instances in the account's default VPC.
 func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
+		p.ApplyDefaults()
 		amiID := p.EC2.AMI
 		if amiID == "" {
 			it, err := ec2.GetInstanceType(ctx, &ec2.GetInstanceTypeArgs{InstanceType: p.EC2.InstanceType})
@@ -51,6 +55,10 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 			return fmt.Errorf("no subnets found in default vpc %s", vpc.Id)
 		}
 		subnetID := subnets.Ids[0]
+		subnetIDs := pulumi.StringArray{}
+		for _, id := range subnets.Ids {
+			subnetIDs = append(subnetIDs, pulumi.String(id))
+		}
 
 		ingress := ec2.SecurityGroupIngressArray{}
 		for _, in := range p.SecurityGroup.Ingress {
@@ -76,6 +84,17 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		})
 		if err != nil {
 			return err
+		}
+
+		if p.RDS.Enabled {
+			if err := declareRDS(ctx, p.RDS, vpc.Id, subnetIDs, sg.ID().ToStringOutput()); err != nil {
+				return err
+			}
+		}
+		if p.Redis.Enabled {
+			if err := declareRedis(ctx, p.Redis, vpc.Id, subnetIDs, sg.ID().ToStringOutput()); err != nil {
+				return err
+			}
 		}
 
 		var ids, ips, dns pulumi.StringArray
@@ -113,6 +132,128 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		ctx.Export("public_dns", dns)
 		return nil
 	}
+}
+
+func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID string, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+	dbSG, err := ec2.NewSecurityGroup(ctx, "hermes-rds-sg", &ec2.SecurityGroupArgs{
+		VpcId: pulumi.String(vpcID),
+		Egress: ec2.SecurityGroupEgressArray{
+			ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = ec2.NewSecurityGroupRule(ctx, "hermes-rds-from-ec2", &ec2.SecurityGroupRuleArgs{
+		Type:                  pulumi.String("ingress"),
+		SecurityGroupId:       dbSG.ID(),
+		SourceSecurityGroupId: appSG,
+		Protocol:              pulumi.String("tcp"),
+		FromPort:              pulumi.Int(cfg.Port),
+		ToPort:                pulumi.Int(cfg.Port),
+		Description:           pulumi.String("Hermes EC2 to MySQL"),
+	})
+	if err != nil {
+		return err
+	}
+	subnetGroup, err := rds.NewSubnetGroup(ctx, "hermes-rds-subnets", &rds.SubnetGroupArgs{
+		SubnetIds:   subnetIDs,
+		Description: pulumi.String("Hermes RDS subnet group"),
+	})
+	if err != nil {
+		return err
+	}
+	password, err := random.NewRandomPassword(ctx, "hermes-rds-password", &random.RandomPasswordArgs{
+		Length:          pulumi.Int(24),
+		Special:         pulumi.Bool(true),
+		OverrideSpecial: pulumi.String("!#$%&*()-_=+[]{}<>:?"),
+	})
+	if err != nil {
+		return err
+	}
+	db, err := rds.NewInstance(ctx, "hermes-rds", &rds.InstanceArgs{
+		AllocatedStorage:    pulumi.Int(cfg.AllocatedStorageGB),
+		DbName:              pulumi.String(cfg.DBName),
+		DbSubnetGroupName:   subnetGroup.Name,
+		DeletionProtection:  pulumi.Bool(false),
+		Engine:              pulumi.String(cfg.Engine),
+		EngineVersion:       pulumi.String(cfg.EngineVersion),
+		InstanceClass:       pulumi.String(cfg.InstanceClass),
+		Password:            password.Result,
+		Port:                pulumi.Int(cfg.Port),
+		PubliclyAccessible:  pulumi.Bool(false),
+		SkipFinalSnapshot:   pulumi.Bool(true),
+		StorageEncrypted:    pulumi.Bool(true),
+		Username:            pulumi.String(cfg.Username),
+		VpcSecurityGroupIds: pulumi.StringArray{dbSG.ID()},
+	})
+	if err != nil {
+		return err
+	}
+	ctx.Export("rds_endpoint", db.Endpoint)
+	ctx.Export("rds_address", db.Address)
+	ctx.Export("rds_port", db.Port)
+	ctx.Export("rds_username", db.Username)
+	return nil
+}
+
+func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID string, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+	cacheSG, err := ec2.NewSecurityGroup(ctx, "hermes-redis-sg", &ec2.SecurityGroupArgs{
+		VpcId: pulumi.String(vpcID),
+		Egress: ec2.SecurityGroupEgressArray{
+			ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = ec2.NewSecurityGroupRule(ctx, "hermes-redis-from-ec2", &ec2.SecurityGroupRuleArgs{
+		Type:                  pulumi.String("ingress"),
+		SecurityGroupId:       cacheSG.ID(),
+		SourceSecurityGroupId: appSG,
+		Protocol:              pulumi.String("tcp"),
+		FromPort:              pulumi.Int(cfg.Port),
+		ToPort:                pulumi.Int(cfg.Port),
+		Description:           pulumi.String("Hermes EC2 to Redis"),
+	})
+	if err != nil {
+		return err
+	}
+	subnetGroup, err := elasticache.NewSubnetGroup(ctx, "hermes-redis-subnets", &elasticache.SubnetGroupArgs{
+		SubnetIds:   subnetIDs,
+		Description: pulumi.String("Hermes Redis subnet group"),
+	})
+	if err != nil {
+		return err
+	}
+	rg, err := elasticache.NewReplicationGroup(ctx, "hermes-redis", &elasticache.ReplicationGroupArgs{
+		ApplyImmediately: pulumi.Bool(true),
+		Description:      pulumi.String("Hermes Redis"),
+		Engine:           pulumi.String(cfg.Engine),
+		EngineVersion:    pulumi.String(cfg.EngineVersion),
+		NodeType:         pulumi.String(cfg.NodeType),
+		NumCacheClusters: pulumi.Int(cfg.NodeCount),
+		Port:             pulumi.Int(cfg.Port),
+		SecurityGroupIds: pulumi.StringArray{cacheSG.ID()},
+		SubnetGroupName:  subnetGroup.Name,
+	})
+	if err != nil {
+		return err
+	}
+	ctx.Export("redis_primary_endpoint", rg.PrimaryEndpointAddress)
+	ctx.Export("redis_reader_endpoint", rg.ReaderEndpointAddress)
+	ctx.Export("redis_port", rg.Port)
+	return nil
 }
 
 const ubuntuOwner = "099720109477" // Canonical (Ubuntu)

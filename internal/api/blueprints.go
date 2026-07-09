@@ -51,6 +51,8 @@ func handleCreateBlueprint(w http.ResponseWriter, r *http.Request, d Deps) {
 	count, _ := strconv.Atoi(r.FormValue("count"))
 	disk, _ := strconv.Atoi(r.FormValue("root_volume_gb"))
 	port, _ := strconv.Atoi(r.FormValue("ingress_port"))
+	rdsStorage, _ := strconv.Atoi(r.FormValue("rds_allocated_storage_gb"))
+	redisNodes, _ := strconv.Atoi(r.FormValue("redis_node_count"))
 	params := provisioner.BlueprintParams{
 		Region: r.FormValue("region"),
 		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
@@ -60,7 +62,26 @@ func handleCreateBlueprint(w http.ResponseWriter, r *http.Request, d Deps) {
 			InstanceType: r.FormValue("instance_type"), Count: count,
 			AMI: r.FormValue("ami"), RootVolumeGB: disk, KeyName: r.FormValue("key_name"),
 		},
+		RDS: provisioner.RDS{
+			Enabled:            r.FormValue("rds_enabled") != "",
+			Engine:             "mysql",
+			EngineVersion:      r.FormValue("rds_engine_version"),
+			InstanceClass:      r.FormValue("rds_instance_class"),
+			AllocatedStorageGB: rdsStorage,
+			DBName:             r.FormValue("rds_db_name"),
+			Username:           r.FormValue("rds_username"),
+			Port:               3306,
+		},
+		Redis: provisioner.Redis{
+			Enabled:       r.FormValue("redis_enabled") != "",
+			Engine:        "redis",
+			EngineVersion: r.FormValue("redis_engine_version"),
+			NodeType:      r.FormValue("redis_node_type"),
+			NodeCount:     redisNodes,
+			Port:          6379,
+		},
 	}
+	params.ApplyDefaults()
 	if err := params.Validate(); err != nil {
 		w.WriteHeader(http.StatusOK)
 		renderBlueprints(w, r, d, "参数无效:"+err.Error())

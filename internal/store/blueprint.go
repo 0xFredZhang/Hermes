@@ -18,6 +18,7 @@ type Blueprint struct {
 }
 
 func (s *Store) CreateBlueprint(ctx context.Context, b Blueprint) (int64, error) {
+	b.Params.ApplyDefaults()
 	raw, err := json.Marshal(b.Params)
 	if err != nil {
 		return 0, err
@@ -45,6 +46,7 @@ func (s *Store) GetBlueprint(ctx context.Context, id int64) (Blueprint, error) {
 	if err := json.Unmarshal([]byte(raw), &b.Params); err != nil {
 		return Blueprint{}, err
 	}
+	b.Params.ApplyDefaults()
 	return b, nil
 }
 
@@ -66,6 +68,7 @@ func (s *Store) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
 		if err := json.Unmarshal([]byte(raw), &b.Params); err != nil {
 			return nil, err
 		}
+		b.Params.ApplyDefaults()
 		out = append(out, b)
 	}
 	return out, rows.Err()

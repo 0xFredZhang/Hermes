@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0
 	github.com/google/uuid v1.6.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.4
+	github.com/pulumi/pulumi-random/sdk/v4 v4.21.0
 	github.com/pulumi/pulumi/sdk/v3 v3.250.0
 	modernc.org/sqlite v1.53.0
 )

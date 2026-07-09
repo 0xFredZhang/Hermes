@@ -40,6 +40,13 @@ func TestIntegrationUpDestroy(t *testing.T) {
 		},
 		Creds: provisioner.AWSCreds{AccessKeyID: ak, SecretAccessKey: sk},
 	}
+	if os.Getenv("HERMES_IT_RDS") != "" {
+		spec.Params.RDS.Enabled = true
+	}
+	if os.Getenv("HERMES_IT_REDIS") != "" {
+		spec.Params.Redis.Enabled = true
+	}
+	spec.Params.ApplyDefaults()
 	ctx := context.Background()
 
 	// Safety net: tear down even if an assertion fails before the explicit
@@ -53,6 +60,17 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	// public_ips are now the instances' Elastic IPs (stable across reboots).
 	if res.Outputs["public_ips"] == nil {
 		t.Fatalf("expected public_ips output, got %+v", res.Outputs)
+	}
+	if spec.Params.RDS.Enabled {
+		if res.Outputs["rds_endpoint"] == nil {
+			t.Fatalf("expected rds_endpoint output, got %+v", res.Outputs)
+		}
+		if res.Outputs["rds_password"] != nil {
+			t.Fatalf("must not export generated RDS password, got %+v", res.Outputs)
+		}
+	}
+	if spec.Params.Redis.Enabled && res.Outputs["redis_primary_endpoint"] == nil {
+		t.Fatalf("expected redis_primary_endpoint output, got %+v", res.Outputs)
 	}
 
 	// Destroy tears down the resources AND removes the now-empty stack.

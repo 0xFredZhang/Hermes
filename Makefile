@@ -45,9 +45,10 @@ env: ## Create .env from .env.example (fills a random master key)
 clean: ## Remove build artifacts
 	rm -rf bin
 
-setup-pulumi: ## Install the Pulumi AWS provider plugin (requires pulumi CLI on PATH)
+setup-pulumi: ## Install Pulumi provider plugins (requires pulumi CLI on PATH)
 	@command -v pulumi >/dev/null || { echo "pulumi CLI not found — install: https://www.pulumi.com/docs/install/"; exit 1; }
 	pulumi plugin install resource aws
+	pulumi plugin install resource random
 
 test-integration: ## Run the real-AWS integration test (needs pulumi + AWS creds in env)
 	go test -tags integration ./internal/provisioner/pulumiengine/ -run TestIntegration -v

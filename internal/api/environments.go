@@ -76,7 +76,10 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	// Initialize every key the templates reference so missing values render as
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
-		"Env": env, "CurrentJobID": int64(0), "CurrentLogs": "", "Plan": "", "PublicIPs": "",
+		"Env": env, "CurrentJobID": int64(0), "CurrentLogs": "", "Plan": "",
+		"PublicIPs": "", "PublicDNS": "",
+		"RDSEndpoint": "", "RDSAddress": "", "RDSPort": "", "RDSUsername": "",
+		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
 	}
 	if len(jobs) > 0 {
 		data["CurrentJobID"] = jobs[0].ID // DESC order → newest first
@@ -90,6 +93,14 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	}
 	if env.Outputs != nil {
 		data["PublicIPs"] = formatIPs(env.Outputs["public_ips"])
+		data["PublicDNS"] = formatIPs(env.Outputs["public_dns"])
+		data["RDSEndpoint"] = formatScalar(env.Outputs["rds_endpoint"])
+		data["RDSAddress"] = formatScalar(env.Outputs["rds_address"])
+		data["RDSPort"] = formatScalar(env.Outputs["rds_port"])
+		data["RDSUsername"] = formatScalar(env.Outputs["rds_username"])
+		data["RedisEndpoint"] = formatScalar(env.Outputs["redis_primary_endpoint"])
+		data["RedisReader"] = formatScalar(env.Outputs["redis_reader_endpoint"])
+		data["RedisPort"] = formatScalar(env.Outputs["redis_port"])
 	}
 	return data
 }
@@ -104,4 +115,11 @@ func formatIPs(v any) string {
 		parts = append(parts, fmt.Sprintf("%v", x))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func formatScalar(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
 }

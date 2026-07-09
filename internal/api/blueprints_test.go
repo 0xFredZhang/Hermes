@@ -82,6 +82,43 @@ func TestCreateBlueprintValidatesAndPersists(t *testing.T) {
 	}
 }
 
+func TestCreateBlueprintPersistsOptionalResources(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+
+	form := url.Values{
+		"name": {"full"}, "project_id": {itoa(pid)}, "cloud_account_id": {itoa(aid)},
+		"region": {"ap-southeast-1"}, "instance_type": {"t3.micro"}, "count": {"1"},
+		"root_volume_gb": {"8"}, "ingress_port": {"22"}, "ingress_protocol": {"tcp"},
+		"ingress_cidr": {"0.0.0.0/0"},
+		"rds_enabled":  {"on"}, "rds_engine_version": {"8.0"}, "rds_instance_class": {"db.t3.micro"},
+		"rds_allocated_storage_gb": {"20"}, "rds_db_name": {"app"}, "rds_username": {"admin"},
+		"redis_enabled": {"on"}, "redis_engine_version": {"7.2"}, "redis_node_type": {"cache.t3.micro"},
+		"redis_node_count": {"1"},
+	}
+	rec := authedPost(t, d, "/blueprints", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303 redirect; body=%s", rec.Code, rec.Body.String())
+	}
+	list, _ := d.Store.ListBlueprints(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("blueprint not persisted: %+v", list)
+	}
+	got := list[0].Params
+	if !got.RDS.Enabled || got.RDS.Engine != "mysql" || got.RDS.EngineVersion != "8.0" {
+		t.Fatalf("RDS config not persisted with defaults: %+v", got.RDS)
+	}
+	if got.RDS.InstanceClass != "db.t3.micro" || got.RDS.AllocatedStorageGB != 20 || got.RDS.DBName != "app" || got.RDS.Username != "admin" || got.RDS.Port != 3306 {
+		t.Fatalf("RDS fields not persisted correctly: %+v", got.RDS)
+	}
+	if !got.Redis.Enabled || got.Redis.Engine != "redis" || got.Redis.EngineVersion != "7.2" {
+		t.Fatalf("Redis config not persisted with defaults: %+v", got.Redis)
+	}
+	if got.Redis.NodeType != "cache.t3.micro" || got.Redis.NodeCount != 1 || got.Redis.Port != 6379 {
+		t.Fatalf("Redis fields not persisted correctly: %+v", got.Redis)
+	}
+}
+
 func TestCreateBlueprintRejectsInvalidParams(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	pid, aid := seedProjectAccount(t, d)
@@ -140,6 +177,14 @@ func TestBlueprintFormHasLiveControls(t *testing.T) {
 		`function filterSelectOptions(input)`,
 		`<select name="ami" id="ami-select">`,
 		`自动:最新 Ubuntu 26.04 LTS`,
+		`name="rds_enabled"`,
+		`name="rds_instance_class" value="db.t3.micro"`,
+		`name="rds_allocated_storage_gb" type="number" value="20"`,
+		`name="rds_db_name" value="app"`,
+		`name="rds_username" value="admin"`,
+		`name="redis_enabled"`,
+		`name="redis_node_type" value="cache.t3.micro"`,
+		`name="redis_node_count" type="number" value="1"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("blueprint form missing %q", want)

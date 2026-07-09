@@ -34,6 +34,7 @@ type Environment struct {
 }
 
 func (s *Store) CreateEnvironment(ctx context.Context, e Environment) (int64, error) {
+	e.Snapshot.ApplyDefaults()
 	snap, err := json.Marshal(e.Snapshot)
 	if err != nil {
 		return 0, err
@@ -67,6 +68,7 @@ func (s *Store) GetEnvironment(ctx context.Context, id int64) (Environment, erro
 	if err := json.Unmarshal([]byte(snap), &e.Snapshot); err != nil {
 		return Environment{}, err
 	}
+	e.Snapshot.ApplyDefaults()
 	if outputs != "" {
 		if err := json.Unmarshal([]byte(outputs), &e.Outputs); err != nil {
 			return Environment{}, err
@@ -93,6 +95,7 @@ func (s *Store) ListEnvironments(ctx context.Context) ([]Environment, error) {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(snap), &e.Snapshot)
+		e.Snapshot.ApplyDefaults()
 		if outputs != "" {
 			_ = json.Unmarshal([]byte(outputs), &e.Outputs)
 		}

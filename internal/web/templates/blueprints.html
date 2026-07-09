@@ -47,6 +47,22 @@
     <label>协议 <select name="ingress_protocol"><option value="tcp">tcp</option><option value="udp">udp</option></select></label>
     <label>来源 CIDR <input name="ingress_cidr" value="0.0.0.0/0" required></label>
   </fieldset>
+  <fieldset>
+    <legend>可选数据库(MySQL)</legend>
+    <label><input name="rds_enabled" type="checkbox"> 启用 MySQL</label>
+    <label>版本 <input name="rds_engine_version" value="8.0"></label>
+    <label>规格 <input name="rds_instance_class" value="db.t3.micro"></label>
+    <label>存储 GB <input name="rds_allocated_storage_gb" type="number" value="20" min="20"></label>
+    <label>数据库名 <input name="rds_db_name" value="app"></label>
+    <label>用户名 <input name="rds_username" value="admin"></label>
+  </fieldset>
+  <fieldset>
+    <legend>可选缓存(Redis)</legend>
+    <label><input name="redis_enabled" type="checkbox"> 启用 Redis</label>
+    <label>版本 <input name="redis_engine_version" value="7.2"></label>
+    <label>规格 <input name="redis_node_type" value="cache.t3.micro"></label>
+    <label>节点数 <input name="redis_node_count" type="number" value="1" min="1" max="5"></label>
+  </fieldset>
   <button type="submit">保存蓝图</button>
 </form>
 <table>

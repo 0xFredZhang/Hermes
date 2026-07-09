@@ -9,10 +9,10 @@ Hermes 是一个轻量的自托管 AWS 资源编排控制台。当前 MVP 支持
 - Go 1.25+
 - SQLite（通过纯 Go 的 `modernc.org/sqlite` 驱动使用）
 - `PATH` 中可用的 Pulumi CLI
-- Pulumi AWS provider plugin
+- Pulumi AWS / Random provider plugins
 - 用于真实 provisioning 验证的 AWS 测试账号
 
-安装 Pulumi AWS provider plugin：
+安装 Pulumi provider plugins：
 
 ```bash
 make setup-pulumi
@@ -71,7 +71,25 @@ make run
 - 蓝图表单中配置的安全组入站规则。
 - 账号默认 VPC / 子网中的一台或多台 EC2 实例。
 - 每台实例一个弹性 IP。
-- 包含 instance ID、公网 IP、公网 DNS 的 outputs。
+- 可选的 RDS MySQL 实例（私网访问，只允许 EC2 安全组访问）。
+- 可选的 ElastiCache Redis replication group（私网访问，只允许 EC2 安全组访问）。
+- 包含 instance ID、公网 IP、公网 DNS、RDS endpoint、Redis endpoint 的 outputs。
+
+RDS/Redis 默认关闭。启用后使用低成本开发默认值：MySQL 8.0、
+`db.t3.micro`、20GB 存储；Redis 7.2、`cache.t3.micro`、1 节点。RDS
+master 密码由 Pulumi 自动生成并作为 secret 写入 Pulumi state，不会写入 Hermes
+环境 outputs，也不会在页面展示。
+
+## AWS 权限提示
+
+除 EC2、安全组、EIP 与只读目录查询权限外，启用可选资源还需要对应账号具备
+RDS 与 ElastiCache 相关资源的创建/删除权限，例如：
+
+- `rds:CreateDBInstance`、`rds:DeleteDBInstance`、`rds:CreateDBSubnetGroup`、
+  `rds:DeleteDBSubnetGroup`、`rds:DescribeDBInstances`。
+- `elasticache:CreateReplicationGroup`、`elasticache:DeleteReplicationGroup`、
+  `elasticache:CreateCacheSubnetGroup`、`elasticache:DeleteCacheSubnetGroup`、
+  `elasticache:DescribeReplicationGroups`。
 
 ## 真实 AWS 验证
 
@@ -80,6 +98,16 @@ make run
 ```bash
 AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=ap-southeast-1 make test-integration
 ```
+
+默认集成测试只创建 EC2、安全组与弹性 IP。要同时验证可选数据库/缓存资源，可显式打开：
+
+```bash
+HERMES_IT_RDS=1 HERMES_IT_REDIS=1 \
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=ap-southeast-1 \
+make test-integration
+```
+
+RDS 与 ElastiCache 的创建和销毁耗时明显更长，也可能产生额外费用。
 
 M2 已用真实 AWS 手动验证：EC2、安全组、弹性 IP 可以成功创建。确认 destroy
 后 EC2、安全组、弹性 IP 都已清理时，可以把资源清理记录补到里程碑计划里。

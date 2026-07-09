@@ -35,7 +35,24 @@
     <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
   {{else if eq .Env.Status "up"}}
     <p class="ok">已就绪</p>
-    {{if .PublicIPs}}<p>公网 IP:{{.PublicIPs}}</p>{{end}}
+    {{if or .PublicIPs .PublicDNS}}
+      <h4>EC2</h4>
+      {{if .PublicIPs}}<p>公网 IP:{{.PublicIPs}}</p>{{end}}
+      {{if .PublicDNS}}<p>公网 DNS:{{.PublicDNS}}</p>{{end}}
+    {{end}}
+    {{if or .RDSEndpoint .RDSAddress}}
+      <h4>数据库</h4>
+      {{if .RDSEndpoint}}<p>Endpoint:{{.RDSEndpoint}}</p>{{end}}
+      {{if .RDSAddress}}<p>地址:{{.RDSAddress}}</p>{{end}}
+      {{if .RDSPort}}<p>端口:{{.RDSPort}}</p>{{end}}
+      {{if .RDSUsername}}<p>用户名:{{.RDSUsername}}</p>{{end}}
+    {{end}}
+    {{if or .RedisEndpoint .RedisReader}}
+      <h4>Redis</h4>
+      {{if .RedisEndpoint}}<p>主 Endpoint:{{.RedisEndpoint}}</p>{{end}}
+      {{if .RedisReader}}<p>读 Endpoint:{{.RedisReader}}</p>{{end}}
+      {{if .RedisPort}}<p>端口:{{.RedisPort}}</p>{{end}}
+    {{end}}
     <form method="post" action="/environments/{{.Env.ID}}/destroy" style="display:inline"><button>销毁</button></form>
   {{else if eq .Env.Status "failed"}}
     <p class="err">失败</p>

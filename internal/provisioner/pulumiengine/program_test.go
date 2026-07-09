@@ -29,6 +29,17 @@ func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resourc
 	if args.TypeToken == "aws:ec2/eip:Eip" {
 		outputs["publicIp"] = "52.1.2.3"
 	}
+	if args.TypeToken == "aws:rds/instance:Instance" {
+		outputs["address"] = "db.example"
+		outputs["endpoint"] = "db.example:3306"
+		outputs["port"] = 3306
+		outputs["username"] = "admin"
+	}
+	if args.TypeToken == "aws:elasticache/replicationGroup:ReplicationGroup" {
+		outputs["primaryEndpointAddress"] = "redis.example"
+		outputs["readerEndpointAddress"] = "redis-ro.example"
+		outputs["port"] = 6379
+	}
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
 }
 
@@ -86,6 +97,16 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	if got := count("aws:ec2/eip:Eip"); got != 2 {
 		t.Fatalf("eips = %d, want 2 (one per instance)", got)
 	}
+	for _, tok := range []string{
+		"aws:rds/subnetGroup:SubnetGroup",
+		"aws:rds/instance:Instance",
+		"aws:elasticache/subnetGroup:SubnetGroup",
+		"aws:elasticache/replicationGroup:ReplicationGroup",
+	} {
+		if got := count(tok); got != 0 {
+			t.Fatalf("%s = %d, want 0 when optional resources are disabled", tok, got)
+		}
+	}
 
 	called := func(tok string) bool {
 		for _, x := range m.calls {
@@ -105,6 +126,87 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	}
 	if !called("aws:ec2/getInstanceType:getInstanceType") {
 		t.Fatalf("expected arch resolution via getInstanceType; calls=%v", m.calls)
+	}
+}
+
+func TestBuildProgramDeclaresOptionalRDSAndRedis(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		RDS: provisioner.RDS{
+			Enabled:            true,
+			Engine:             "mysql",
+			EngineVersion:      "8.0",
+			InstanceClass:      "db.t3.micro",
+			AllocatedStorageGB: 20,
+			DBName:             "app",
+			Username:           "admin",
+			Port:               3306,
+		},
+		Redis: provisioner.Redis{
+			Enabled:       true,
+			Engine:        "redis",
+			EngineVersion: "7.2",
+			NodeType:      "cache.t3.micro",
+			NodeCount:     1,
+			Port:          6379,
+		},
+	}
+	m := &recordMocks{}
+	var outputs map[string]any
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if err := buildProgram(params)(ctx); err != nil {
+			return err
+		}
+		outputs = map[string]any{}
+		for key := range ctx.GetCurrentExportMap() {
+			outputs[key] = true
+		}
+		return nil
+	}, pulumi.WithMocks("hermes", "test", m))
+	if err != nil {
+		t.Fatalf("RunErr: %v", err)
+	}
+	count := func(tok string) int {
+		n := 0
+		for _, x := range m.types {
+			if x == tok {
+				n++
+			}
+		}
+		return n
+	}
+	wantCounts := map[string]int{
+		"aws:rds/subnetGroup:SubnetGroup":                   1,
+		"aws:rds/instance:Instance":                         1,
+		"aws:elasticache/subnetGroup:SubnetGroup":           1,
+		"aws:elasticache/replicationGroup:ReplicationGroup": 1,
+		"aws:ec2/securityGroupRule:SecurityGroupRule":       2,
+		"aws:ec2/securityGroup:SecurityGroup":               3,
+	}
+	for tok, want := range wantCounts {
+		if got := count(tok); got != want {
+			t.Fatalf("%s = %d, want %d; all resources=%v", tok, got, want, m.types)
+		}
+	}
+	for _, key := range []string{
+		"rds_endpoint",
+		"rds_address",
+		"rds_port",
+		"rds_username",
+		"redis_primary_endpoint",
+		"redis_reader_endpoint",
+		"redis_port",
+	} {
+		if outputs[key] == nil {
+			t.Fatalf("missing output %q; outputs=%+v", key, outputs)
+		}
+	}
+	if outputs["rds_password"] != nil {
+		t.Fatalf("RDS password must not be exported: %+v", outputs)
 	}
 }
 

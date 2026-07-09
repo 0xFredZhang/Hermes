@@ -69,3 +69,39 @@ func TestEnvironmentStatusFragmentShowsConfirmButton(t *testing.T) {
 		t.Fatalf("preview_ready status should show confirm button: %s", rec.Body.String())
 	}
 }
+
+func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	ctx := context.Background()
+	_ = d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvUp)
+	_ = d.Store.SetEnvironmentOutputs(ctx, envID, map[string]any{
+		"public_ips":             []any{"52.1.2.3"},
+		"public_dns":             []any{"ec2-52-1-2-3.compute.amazonaws.com"},
+		"rds_endpoint":           "db.example:3306",
+		"rds_address":            "db.example",
+		"rds_port":               float64(3306),
+		"rds_username":           "admin",
+		"redis_primary_endpoint": "redis.example",
+		"redis_reader_endpoint":  "redis-ro.example",
+		"redis_port":             float64(6379),
+	})
+
+	rec := authedGet(t, d, "/environments/"+itoa(envID)+"/status")
+	body := rec.Body.String()
+	for _, want := range []string{
+		"EC2",
+		"52.1.2.3",
+		"db.example:3306",
+		"admin",
+		"redis.example",
+		"6379",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status fragment missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "password") || strings.Contains(body, "密码") {
+		t.Fatalf("status fragment must not expose generated DB password: %s", body)
+	}
+}
