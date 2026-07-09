@@ -40,6 +40,11 @@
       {{if .PublicIPs}}<p>公网 IP:{{.PublicIPs}}</p>{{end}}
       {{if .PublicDNS}}<p>公网 DNS:{{.PublicDNS}}</p>{{end}}
     {{end}}
+    {{if or .VPCID .SubnetIDs}}
+      <h4>网络</h4>
+      {{if .VPCID}}<p>VPC:{{.VPCID}}</p>{{end}}
+      {{if .SubnetIDs}}<p>子网:{{.SubnetIDs}}</p>{{end}}
+    {{end}}
     {{if or .RDSEndpoint .RDSAddress}}
       <h4>数据库</h4>
       {{if .RDSEndpoint}}<p>Endpoint:{{.RDSEndpoint}}</p>{{end}}

@@ -6,6 +6,7 @@ package pulumiengine
 import (
 	"fmt"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
@@ -16,7 +17,7 @@ import (
 )
 
 // buildProgram returns a Pulumi inline program declaring the blueprint's
-// security group and EC2 instances in the account's default VPC.
+// network, security group, EC2 instances, and optional backing services.
 func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
 		p.ApplyDefaults()
@@ -41,24 +42,11 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 			amiID = ami.Id
 		}
 
-		vpc, err := ec2.LookupVpc(ctx, &ec2.LookupVpcArgs{Default: pulumi.BoolRef(true)})
+		network, err := declareNetwork(ctx, p.Network)
 		if err != nil {
 			return err
 		}
-		subnets, err := ec2.GetSubnets(ctx, &ec2.GetSubnetsArgs{
-			Filters: []ec2.GetSubnetsFilter{{Name: "vpc-id", Values: []string{vpc.Id}}},
-		})
-		if err != nil {
-			return err
-		}
-		if len(subnets.Ids) == 0 {
-			return fmt.Errorf("no subnets found in default vpc %s", vpc.Id)
-		}
-		subnetID := subnets.Ids[0]
-		subnetIDs := pulumi.StringArray{}
-		for _, id := range subnets.Ids {
-			subnetIDs = append(subnetIDs, pulumi.String(id))
-		}
+		subnetID := network.instanceSubnetID
 
 		ingress := ec2.SecurityGroupIngressArray{}
 		for _, in := range p.SecurityGroup.Ingress {
@@ -71,7 +59,7 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 			})
 		}
 		sg, err := ec2.NewSecurityGroup(ctx, "hermes-sg", &ec2.SecurityGroupArgs{
-			VpcId:   pulumi.String(vpc.Id),
+			VpcId:   network.vpcID,
 			Ingress: ingress,
 			Egress: ec2.SecurityGroupEgressArray{
 				ec2.SecurityGroupEgressArgs{
@@ -87,12 +75,12 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		}
 
 		if p.RDS.Enabled {
-			if err := declareRDS(ctx, p.RDS, vpc.Id, subnetIDs, sg.ID().ToStringOutput()); err != nil {
+			if err := declareRDS(ctx, p.RDS, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput()); err != nil {
 				return err
 			}
 		}
 		if p.Redis.Enabled {
-			if err := declareRedis(ctx, p.Redis, vpc.Id, subnetIDs, sg.ID().ToStringOutput()); err != nil {
+			if err := declareRedis(ctx, p.Redis, network.vpcID, network.subnetIDs, sg.ID().ToStringOutput()); err != nil {
 				return err
 			}
 		}
@@ -102,7 +90,7 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 			args := &ec2.InstanceArgs{
 				Ami:                 pulumi.String(amiID),
 				InstanceType:        pulumi.String(p.EC2.InstanceType),
-				SubnetId:            pulumi.String(subnetID),
+				SubnetId:            subnetID,
 				VpcSecurityGroupIds: pulumi.StringArray{sg.ID()},
 				RootBlockDevice: &ec2.InstanceRootBlockDeviceArgs{
 					VolumeSize: pulumi.Int(p.EC2.RootVolumeGB),
@@ -130,13 +118,129 @@ func buildProgram(p provisioner.BlueprintParams) pulumi.RunFunc {
 		ctx.Export("instance_ids", ids)
 		ctx.Export("public_ips", ips)
 		ctx.Export("public_dns", dns)
+		if p.Network.Enabled {
+			ctx.Export("vpc_id", network.vpcID)
+			ctx.Export("subnet_ids", network.subnetIDs)
+		}
 		return nil
 	}
 }
 
-func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID string, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+type networkResources struct {
+	vpcID            pulumi.StringInput
+	subnetIDs        pulumi.StringArray
+	instanceSubnetID pulumi.StringInput
+}
+
+func declareNetwork(ctx *pulumi.Context, cfg provisioner.Network) (networkResources, error) {
+	if cfg.Enabled {
+		return declareManagedNetwork(ctx, cfg)
+	}
+	vpc, err := ec2.LookupVpc(ctx, &ec2.LookupVpcArgs{Default: pulumi.BoolRef(true)})
+	if err != nil {
+		return networkResources{}, err
+	}
+	subnets, err := ec2.GetSubnets(ctx, &ec2.GetSubnetsArgs{
+		Filters: []ec2.GetSubnetsFilter{{Name: "vpc-id", Values: []string{vpc.Id}}},
+	})
+	if err != nil {
+		return networkResources{}, err
+	}
+	if len(subnets.Ids) == 0 {
+		return networkResources{}, fmt.Errorf("no subnets found in default vpc %s", vpc.Id)
+	}
+	subnetIDs := pulumi.StringArray{}
+	for _, id := range subnets.Ids {
+		subnetIDs = append(subnetIDs, pulumi.String(id))
+	}
+	return networkResources{
+		vpcID:            pulumi.String(vpc.Id),
+		subnetIDs:        subnetIDs,
+		instanceSubnetID: pulumi.String(subnets.Ids[0]),
+	}, nil
+}
+
+func declareManagedNetwork(ctx *pulumi.Context, cfg provisioner.Network) (networkResources, error) {
+	zones, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
+		State: pulumi.StringRef("available"),
+	}, nil)
+	if err != nil {
+		return networkResources{}, err
+	}
+	if len(zones.Names) == 0 {
+		return networkResources{}, fmt.Errorf("no availability zones found")
+	}
+	vpc, err := ec2.NewVpc(ctx, "hermes-vpc", &ec2.VpcArgs{
+		CidrBlock:          pulumi.String(cfg.VPCCIDR),
+		EnableDnsHostnames: pulumi.Bool(true),
+		EnableDnsSupport:   pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name": pulumi.String("hermes-vpc"),
+		},
+	})
+	if err != nil {
+		return networkResources{}, err
+	}
+	igw, err := ec2.NewInternetGateway(ctx, "hermes-igw", &ec2.InternetGatewayArgs{
+		VpcId: vpc.ID(),
+		Tags: pulumi.StringMap{
+			"Name": pulumi.String("hermes-igw"),
+		},
+	})
+	if err != nil {
+		return networkResources{}, err
+	}
+	routeTable, err := ec2.NewRouteTable(ctx, "hermes-public-rt", &ec2.RouteTableArgs{
+		VpcId: vpc.ID(),
+		Routes: ec2.RouteTableRouteArray{
+			ec2.RouteTableRouteArgs{
+				CidrBlock: pulumi.String("0.0.0.0/0"),
+				GatewayId: igw.ID(),
+			},
+		},
+		Tags: pulumi.StringMap{
+			"Name": pulumi.String("hermes-public-rt"),
+		},
+	})
+	if err != nil {
+		return networkResources{}, err
+	}
+	subnetIDs := pulumi.StringArray{}
+	for i, cidr := range cfg.PublicSubnetCIDRs {
+		zone := zones.Names[i%len(zones.Names)]
+		subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("hermes-public-subnet-%d", i), &ec2.SubnetArgs{
+			VpcId:               vpc.ID(),
+			CidrBlock:           pulumi.String(cidr),
+			AvailabilityZone:    pulumi.String(zone),
+			MapPublicIpOnLaunch: pulumi.Bool(cfg.MapPublicIPOnLaunch),
+			Tags: pulumi.StringMap{
+				"Name": pulumi.String(fmt.Sprintf("hermes-public-%d", i)),
+			},
+		})
+		if err != nil {
+			return networkResources{}, err
+		}
+		if _, err := ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("hermes-public-rta-%d", i), &ec2.RouteTableAssociationArgs{
+			RouteTableId: routeTable.ID(),
+			SubnetId:     subnet.ID(),
+		}); err != nil {
+			return networkResources{}, err
+		}
+		subnetIDs = append(subnetIDs, subnet.ID().ToStringOutput())
+	}
+	if len(subnetIDs) == 0 {
+		return networkResources{}, fmt.Errorf("managed network requires at least one public subnet")
+	}
+	return networkResources{
+		vpcID:            vpc.ID().ToStringOutput(),
+		subnetIDs:        subnetIDs,
+		instanceSubnetID: subnetIDs[0],
+	}, nil
+}
+
+func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
 	dbSG, err := ec2.NewSecurityGroup(ctx, "hermes-rds-sg", &ec2.SecurityGroupArgs{
-		VpcId: pulumi.String(vpcID),
+		VpcId: vpcID,
 		Egress: ec2.SecurityGroupEgressArray{
 			ec2.SecurityGroupEgressArgs{
 				Protocol:   pulumi.String("-1"),
@@ -202,9 +306,9 @@ func declareRDS(ctx *pulumi.Context, cfg provisioner.RDS, vpcID string, subnetID
 	return nil
 }
 
-func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID string, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
+func declareRedis(ctx *pulumi.Context, cfg provisioner.Redis, vpcID pulumi.StringInput, subnetIDs pulumi.StringArray, appSG pulumi.StringOutput) error {
 	cacheSG, err := ec2.NewSecurityGroup(ctx, "hermes-redis-sg", &ec2.SecurityGroupArgs{
-		VpcId: pulumi.String(vpcID),
+		VpcId: vpcID,
 		Egress: ec2.SecurityGroupEgressArray{
 			ec2.SecurityGroupEgressArgs{
 				Protocol:   pulumi.String("-1"),

@@ -28,6 +28,13 @@ type EC2 struct {
 	KeyName      string `json:"key_name"`
 }
 
+type Network struct {
+	Enabled             bool     `json:"enabled"`
+	VPCCIDR             string   `json:"vpc_cidr"`
+	PublicSubnetCIDRs   []string `json:"public_subnet_cidrs"`
+	MapPublicIPOnLaunch bool     `json:"map_public_ip_on_launch"`
+}
+
 type RDS struct {
 	Enabled            bool   `json:"enabled"`
 	Engine             string `json:"engine"`
@@ -52,11 +59,19 @@ type BlueprintParams struct {
 	Region        string        `json:"region"`
 	SecurityGroup SecurityGroup `json:"security_group"`
 	EC2           EC2           `json:"ec2"`
+	Network       Network       `json:"network,omitempty"`
 	RDS           RDS           `json:"rds,omitempty"`
 	Redis         Redis         `json:"redis,omitempty"`
 }
 
 func (p *BlueprintParams) ApplyDefaults() {
+	if p.Network.VPCCIDR == "" {
+		p.Network.VPCCIDR = "10.0.0.0/16"
+	}
+	if p.Network.PublicSubnetCIDRs == nil {
+		p.Network.PublicSubnetCIDRs = []string{"10.0.1.0/24", "10.0.2.0/24"}
+	}
+	p.Network.MapPublicIPOnLaunch = true
 	if p.RDS.Engine == "" {
 		p.RDS.Engine = "mysql"
 	}
@@ -95,8 +110,8 @@ func (p *BlueprintParams) ApplyDefaults() {
 	}
 }
 
-// Validate enforces blueprint rules for EC2 plus optional M3a resources.
-func (p BlueprintParams) Validate() error {
+// Validate enforces blueprint rules for EC2 plus optional resources.
+func (p *BlueprintParams) Validate() error {
 	p.ApplyDefaults()
 	if p.Region == "" {
 		return fmt.Errorf("region is required")
@@ -119,6 +134,22 @@ func (p BlueprintParams) Validate() error {
 		}
 		if _, _, err := net.ParseCIDR(in.CIDR); err != nil {
 			return fmt.Errorf("ingress[%d]: invalid cidr %q: %w", i, in.CIDR, err)
+		}
+	}
+	if p.Network.Enabled {
+		if _, _, err := net.ParseCIDR(p.Network.VPCCIDR); err != nil {
+			return fmt.Errorf("network.vpc_cidr invalid %q: %w", p.Network.VPCCIDR, err)
+		}
+		if len(p.Network.PublicSubnetCIDRs) == 0 {
+			return fmt.Errorf("network.public_subnet_cidrs is required when managed network is enabled")
+		}
+		for i, cidr := range p.Network.PublicSubnetCIDRs {
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				return fmt.Errorf("network.public_subnet_cidrs[%d] invalid %q: %w", i, cidr, err)
+			}
+		}
+		if (p.RDS.Enabled || p.Redis.Enabled) && len(p.Network.PublicSubnetCIDRs) < 2 {
+			return fmt.Errorf("network.public_subnet_cidrs must include at least 2 subnets when RDS or Redis is enabled")
 		}
 	}
 	if p.RDS.Enabled {

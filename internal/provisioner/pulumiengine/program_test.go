@@ -29,6 +29,12 @@ func (m *recordMocks) NewResource(args pulumi.MockResourceArgs) (string, resourc
 	if args.TypeToken == "aws:ec2/eip:Eip" {
 		outputs["publicIp"] = "52.1.2.3"
 	}
+	if args.TypeToken == "aws:ec2/vpc:Vpc" {
+		outputs["id"] = "vpc-managed"
+	}
+	if args.TypeToken == "aws:ec2/subnet:Subnet" {
+		outputs["id"] = args.Name + "_id"
+	}
 	if args.TypeToken == "aws:rds/instance:Instance" {
 		outputs["address"] = "db.example"
 		outputs["endpoint"] = "db.example:3306"
@@ -52,6 +58,8 @@ func (m *recordMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, erro
 		return resource.NewPropertyMapFromMap(map[string]any{"id": "vpc-123"}), nil
 	case "aws:ec2/getSubnets:getSubnets":
 		return resource.NewPropertyMapFromMap(map[string]any{"ids": []any{"subnet-123"}}), nil
+	case "aws:index/getAvailabilityZones:getAvailabilityZones":
+		return resource.NewPropertyMapFromMap(map[string]any{"names": []any{"ap-southeast-1a", "ap-southeast-1b"}}), nil
 	case "aws:ec2/getAmi:getAmi":
 		return resource.NewPropertyMapFromMap(map[string]any{"id": "ami-0abc"}), nil
 	case "aws:ec2/getInstanceType:getInstanceType":
@@ -98,6 +106,11 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 		t.Fatalf("eips = %d, want 2 (one per instance)", got)
 	}
 	for _, tok := range []string{
+		"aws:ec2/vpc:Vpc",
+		"aws:ec2/internetGateway:InternetGateway",
+		"aws:ec2/subnet:Subnet",
+		"aws:ec2/routeTable:RouteTable",
+		"aws:ec2/routeTableAssociation:RouteTableAssociation",
 		"aws:rds/subnetGroup:SubnetGroup",
 		"aws:rds/instance:Instance",
 		"aws:elasticache/subnetGroup:SubnetGroup",
@@ -126,6 +139,70 @@ func TestBuildProgramDeclaresResources(t *testing.T) {
 	}
 	if !called("aws:ec2/getInstanceType:getInstanceType") {
 		t.Fatalf("expected arch resolution via getInstanceType; calls=%v", m.calls)
+	}
+}
+
+func TestBuildProgramDeclaresManagedNetwork(t *testing.T) {
+	params := provisioner.BlueprintParams{
+		Region: "ap-southeast-1",
+		SecurityGroup: provisioner.SecurityGroup{Ingress: []provisioner.Ingress{
+			{Port: 22, Protocol: "tcp", CIDR: "0.0.0.0/0", Desc: "SSH"},
+		}},
+		EC2: provisioner.EC2{InstanceType: "t3.micro", Count: 1, RootVolumeGB: 8},
+		Network: provisioner.Network{
+			Enabled:             true,
+			VPCCIDR:             "10.42.0.0/16",
+			PublicSubnetCIDRs:   []string{"10.42.1.0/24", "10.42.2.0/24"},
+			MapPublicIPOnLaunch: true,
+		},
+	}
+	m := &recordMocks{}
+	var outputs map[string]any
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if err := buildProgram(params)(ctx); err != nil {
+			return err
+		}
+		outputs = map[string]any{}
+		for key := range ctx.GetCurrentExportMap() {
+			outputs[key] = true
+		}
+		return nil
+	}, pulumi.WithMocks("hermes", "test", m))
+	if err != nil {
+		t.Fatalf("RunErr: %v", err)
+	}
+	count := func(tok string) int {
+		n := 0
+		for _, x := range m.types {
+			if x == tok {
+				n++
+			}
+		}
+		return n
+	}
+	wantCounts := map[string]int{
+		"aws:ec2/vpc:Vpc":                                     1,
+		"aws:ec2/internetGateway:InternetGateway":             1,
+		"aws:ec2/subnet:Subnet":                               2,
+		"aws:ec2/routeTable:RouteTable":                       1,
+		"aws:ec2/routeTableAssociation:RouteTableAssociation": 2,
+		"aws:ec2/securityGroup:SecurityGroup":                 1,
+		"aws:ec2/instance:Instance":                           1,
+	}
+	for tok, want := range wantCounts {
+		if got := count(tok); got != want {
+			t.Fatalf("%s = %d, want %d; all resources=%v", tok, got, want, m.types)
+		}
+	}
+	if outputs["vpc_id"] == nil || outputs["subnet_ids"] == nil {
+		t.Fatalf("missing managed network outputs: %+v", outputs)
+	}
+	for _, tok := range []string{"aws:ec2/getVpc:getVpc", "aws:ec2/getSubnets:getSubnets"} {
+		for _, call := range m.calls {
+			if call == tok {
+				t.Fatalf("managed network should not look up default network; calls=%v", m.calls)
+			}
+		}
 	}
 }
 

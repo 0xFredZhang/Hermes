@@ -51,6 +51,18 @@ func TestDefaultOptionalResources(t *testing.T) {
 	p := validParams()
 	p.ApplyDefaults()
 
+	if p.Network.Enabled {
+		t.Fatalf("managed network should default disabled: %+v", p.Network)
+	}
+	if p.Network.VPCCIDR != "10.0.0.0/16" {
+		t.Fatalf("unexpected VPC CIDR default: %+v", p.Network)
+	}
+	if len(p.Network.PublicSubnetCIDRs) != 2 || p.Network.PublicSubnetCIDRs[0] != "10.0.1.0/24" || p.Network.PublicSubnetCIDRs[1] != "10.0.2.0/24" {
+		t.Fatalf("unexpected subnet CIDR defaults: %+v", p.Network)
+	}
+	if !p.Network.MapPublicIPOnLaunch {
+		t.Fatalf("managed public subnets should map public IPs by default: %+v", p.Network)
+	}
 	if p.RDS.Enabled || p.Redis.Enabled {
 		t.Fatalf("optional resources should default disabled: rds=%+v redis=%+v", p.RDS, p.Redis)
 	}
@@ -65,6 +77,56 @@ func TestDefaultOptionalResources(t *testing.T) {
 	}
 	if p.Redis.NodeCount != 1 || p.Redis.Port != 6379 {
 		t.Fatalf("unexpected Redis defaults: %+v", p.Redis)
+	}
+}
+
+func TestValidateManagedNetwork(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*BlueprintParams)
+		wantErr bool
+	}{
+		{"disabled ignores empty network", func(p *BlueprintParams) {
+			p.Network.VPCCIDR = ""
+			p.Network.PublicSubnetCIDRs = nil
+		}, false},
+		{"enabled valid defaults", func(p *BlueprintParams) { p.Network.Enabled = true }, false},
+		{"enabled bad vpc cidr", func(p *BlueprintParams) {
+			p.Network.Enabled = true
+			p.Network.VPCCIDR = "not-a-cidr"
+		}, true},
+		{"enabled no subnets", func(p *BlueprintParams) {
+			p.Network.Enabled = true
+			p.Network.PublicSubnetCIDRs = []string{}
+		}, true},
+		{"enabled bad subnet cidr", func(p *BlueprintParams) {
+			p.Network.Enabled = true
+			p.Network.PublicSubnetCIDRs = []string{"10.0.1.0/24", "bad"}
+		}, true},
+		{"enabled rds needs two managed subnets", func(p *BlueprintParams) {
+			p.Network.Enabled = true
+			p.Network.PublicSubnetCIDRs = []string{"10.0.1.0/24"}
+			p.RDS.Enabled = true
+		}, true},
+		{"enabled redis needs two managed subnets", func(p *BlueprintParams) {
+			p.Network.Enabled = true
+			p.Network.PublicSubnetCIDRs = []string{"10.0.1.0/24"}
+			p.Redis.Enabled = true
+		}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := validParams()
+			p.ApplyDefaults()
+			tt.mutate(&p)
+			err := p.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
@@ -113,5 +175,11 @@ func TestBlueprintParamsOldJSONDefaultsOptionalResources(t *testing.T) {
 	}
 	if p.RDS.Enabled || p.Redis.Enabled {
 		t.Fatalf("old blueprint JSON should keep optional resources disabled: rds=%+v redis=%+v", p.RDS, p.Redis)
+	}
+	if p.Network.Enabled {
+		t.Fatalf("old blueprint JSON should keep managed network disabled: %+v", p.Network)
+	}
+	if p.Network.VPCCIDR == "" || len(p.Network.PublicSubnetCIDRs) == 0 {
+		t.Fatalf("old blueprint JSON should receive managed network defaults: %+v", p.Network)
 	}
 }

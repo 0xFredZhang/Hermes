@@ -25,3 +25,14 @@ func TestEnvVarsScopesCredentials(t *testing.T) {
 		t.Fatalf("backend/passphrase not mapped: %v", ev)
 	}
 }
+
+func TestEnvVarsPassesS3BackendURL(t *testing.T) {
+	p := New("hermes", "s3://hermes-state", "pass123")
+	ev := p.envVars(provisioner.Spec{
+		Region: "ap-southeast-1",
+		Creds:  provisioner.AWSCreds{AccessKeyID: "AKIA", SecretAccessKey: "SECRET"},
+	})
+	if ev["PULUMI_BACKEND_URL"] != "s3://hermes-state" {
+		t.Fatalf("S3 backend URL should pass through unchanged: %v", ev)
+	}
+}

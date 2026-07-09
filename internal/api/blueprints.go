@@ -62,6 +62,12 @@ func handleCreateBlueprint(w http.ResponseWriter, r *http.Request, d Deps) {
 			InstanceType: r.FormValue("instance_type"), Count: count,
 			AMI: r.FormValue("ami"), RootVolumeGB: disk, KeyName: r.FormValue("key_name"),
 		},
+		Network: provisioner.Network{
+			Enabled:             r.FormValue("network_enabled") != "",
+			VPCCIDR:             strings.TrimSpace(r.FormValue("network_vpc_cidr")),
+			PublicSubnetCIDRs:   splitCIDRs(r.FormValue("network_public_subnet_cidrs")),
+			MapPublicIPOnLaunch: r.FormValue("network_map_public_ip_launch") != "",
+		},
 		RDS: provisioner.RDS{
 			Enabled:            r.FormValue("rds_enabled") != "",
 			Engine:             "mysql",
@@ -138,6 +144,20 @@ func slug(s string) string {
 	out := strings.Trim(b.String(), "-")
 	if out == "" {
 		out = "env"
+	}
+	return out
+}
+
+func splitCIDRs(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field != "" {
+			out = append(out, field)
+		}
 	}
 	return out
 }

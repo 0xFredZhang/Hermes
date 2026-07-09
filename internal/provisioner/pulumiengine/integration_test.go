@@ -46,6 +46,9 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	if os.Getenv("HERMES_IT_REDIS") != "" {
 		spec.Params.Redis.Enabled = true
 	}
+	if os.Getenv("HERMES_IT_NETWORK") != "" {
+		spec.Params.Network.Enabled = true
+	}
 	spec.Params.ApplyDefaults()
 	ctx := context.Background()
 
@@ -60,6 +63,11 @@ func TestIntegrationUpDestroy(t *testing.T) {
 	// public_ips are now the instances' Elastic IPs (stable across reboots).
 	if res.Outputs["public_ips"] == nil {
 		t.Fatalf("expected public_ips output, got %+v", res.Outputs)
+	}
+	if spec.Params.Network.Enabled {
+		if res.Outputs["vpc_id"] == nil || res.Outputs["subnet_ids"] == nil {
+			t.Fatalf("expected managed network outputs, got %+v", res.Outputs)
+		}
 	}
 	if spec.Params.RDS.Enabled {
 		if res.Outputs["rds_endpoint"] == nil {

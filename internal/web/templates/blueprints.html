@@ -48,6 +48,12 @@
     <label>来源 CIDR <input name="ingress_cidr" value="0.0.0.0/0" required></label>
   </fieldset>
   <fieldset>
+    <legend>可选网络(VPC)</legend>
+    <label><input name="network_enabled" type="checkbox"> 创建 Hermes VPC</label>
+    <label>VPC CIDR <input name="network_vpc_cidr" value="10.0.0.0/16"></label>
+    <label>公网子网 CIDR <input name="network_public_subnet_cidrs" value="10.0.1.0/24,10.0.2.0/24"></label>
+  </fieldset>
+  <fieldset>
     <legend>可选数据库(MySQL)</legend>
     <label><input name="rds_enabled" type="checkbox"> 启用 MySQL</label>
     <label>版本 <input name="rds_engine_version" value="8.0"></label>

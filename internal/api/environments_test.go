@@ -78,6 +78,8 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 	_ = d.Store.SetEnvironmentOutputs(ctx, envID, map[string]any{
 		"public_ips":             []any{"52.1.2.3"},
 		"public_dns":             []any{"ec2-52-1-2-3.compute.amazonaws.com"},
+		"vpc_id":                 "vpc-123",
+		"subnet_ids":             []any{"subnet-1", "subnet-2"},
 		"rds_endpoint":           "db.example:3306",
 		"rds_address":            "db.example",
 		"rds_port":               float64(3306),
@@ -92,6 +94,9 @@ func TestEnvironmentStatusFragmentShowsRichOutputs(t *testing.T) {
 	for _, want := range []string{
 		"EC2",
 		"52.1.2.3",
+		"网络",
+		"vpc-123",
+		"subnet-1",
 		"db.example:3306",
 		"admin",
 		"redis.example",

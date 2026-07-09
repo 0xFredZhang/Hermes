@@ -78,6 +78,7 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	data := map[string]any{
 		"Env": env, "CurrentJobID": int64(0), "CurrentLogs": "", "Plan": "",
 		"PublicIPs": "", "PublicDNS": "",
+		"VPCID": "", "SubnetIDs": "",
 		"RDSEndpoint": "", "RDSAddress": "", "RDSPort": "", "RDSUsername": "",
 		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
 	}
@@ -94,6 +95,8 @@ func envViewData(env store.Environment, jobs []store.Job) map[string]any {
 	if env.Outputs != nil {
 		data["PublicIPs"] = formatIPs(env.Outputs["public_ips"])
 		data["PublicDNS"] = formatIPs(env.Outputs["public_dns"])
+		data["VPCID"] = formatScalar(env.Outputs["vpc_id"])
+		data["SubnetIDs"] = formatIPs(env.Outputs["subnet_ids"])
 		data["RDSEndpoint"] = formatScalar(env.Outputs["rds_endpoint"])
 		data["RDSAddress"] = formatScalar(env.Outputs["rds_address"])
 		data["RDSPort"] = formatScalar(env.Outputs["rds_port"])

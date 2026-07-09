@@ -47,6 +47,8 @@ func TestRenderPartialEnvStatusRichOutputs(t *testing.T) {
 		"Env":           map[string]any{"ID": int64(1), "Status": "up"},
 		"PublicIPs":     "52.1.2.3",
 		"PublicDNS":     "ec2-52-1-2-3.compute.amazonaws.com",
+		"VPCID":         "vpc-123",
+		"SubnetIDs":     "subnet-1, subnet-2",
 		"RDSEndpoint":   "db.example:3306",
 		"RDSAddress":    "db.example",
 		"RDSPort":       "3306",
@@ -59,7 +61,7 @@ func TestRenderPartialEnvStatusRichOutputs(t *testing.T) {
 		t.Fatalf("RenderPartial: %v", err)
 	}
 	out := b.String()
-	for _, want := range []string{"EC2", "数据库", "Redis", "52.1.2.3", "db.example:3306", "admin", "redis.example"} {
+	for _, want := range []string{"EC2", "网络", "数据库", "Redis", "52.1.2.3", "vpc-123", "db.example:3306", "admin", "redis.example"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("env_status output missing %q: %s", want, out)
 		}

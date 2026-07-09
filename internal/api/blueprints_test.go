@@ -119,6 +119,40 @@ func TestCreateBlueprintPersistsOptionalResources(t *testing.T) {
 	}
 }
 
+func TestCreateBlueprintPersistsManagedNetwork(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+
+	form := url.Values{
+		"name": {"net"}, "project_id": {itoa(pid)}, "cloud_account_id": {itoa(aid)},
+		"region": {"ap-southeast-1"}, "instance_type": {"t3.micro"}, "count": {"1"},
+		"root_volume_gb": {"8"}, "ingress_port": {"22"}, "ingress_protocol": {"tcp"},
+		"ingress_cidr":                 {"0.0.0.0/0"},
+		"network_enabled":              {"on"},
+		"network_vpc_cidr":             {"10.42.0.0/16"},
+		"network_public_subnet_cidrs":  {"10.42.1.0/24, 10.42.2.0/24"},
+		"network_map_public_ip_launch": {"on"},
+	}
+	rec := authedPost(t, d, "/blueprints", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303 redirect; body=%s", rec.Code, rec.Body.String())
+	}
+	list, _ := d.Store.ListBlueprints(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("blueprint not persisted: %+v", list)
+	}
+	got := list[0].Params.Network
+	if !got.Enabled || got.VPCCIDR != "10.42.0.0/16" {
+		t.Fatalf("managed network config not persisted: %+v", got)
+	}
+	if len(got.PublicSubnetCIDRs) != 2 || got.PublicSubnetCIDRs[0] != "10.42.1.0/24" || got.PublicSubnetCIDRs[1] != "10.42.2.0/24" {
+		t.Fatalf("managed public subnet CIDRs not parsed: %+v", got)
+	}
+	if !got.MapPublicIPOnLaunch {
+		t.Fatalf("map public IP setting not persisted: %+v", got)
+	}
+}
+
 func TestCreateBlueprintRejectsInvalidParams(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	pid, aid := seedProjectAccount(t, d)
@@ -185,9 +219,16 @@ func TestBlueprintFormHasLiveControls(t *testing.T) {
 		`name="redis_enabled"`,
 		`name="redis_node_type" value="cache.t3.micro"`,
 		`name="redis_node_count" type="number" value="1"`,
+		`name="network_enabled"`,
+		`name="network_vpc_cidr" value="10.0.0.0/16"`,
+		`name="network_public_subnet_cidrs"`,
+		`10.0.1.0/24,10.0.2.0/24`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("blueprint form missing %q", want)
 		}
+	}
+	if strings.Contains(body, `name="network_map_public_ip_launch"`) {
+		t.Fatalf("blueprint form should keep map_public_ip_on_launch as an internal default")
 	}
 }
