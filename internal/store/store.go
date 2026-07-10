@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -56,31 +58,47 @@ func (s *Store) migrate() error {
 	sort.Strings(names)
 
 	for _, name := range names {
-		var exists string
-		err := s.db.QueryRow(
-			`SELECT version FROM schema_migrations WHERE version = ?`, name,
-		).Scan(&exists)
-		if err == nil {
-			continue // already applied
-		}
-		if err != sql.ErrNoRows {
-			return err
-		}
 		body, err := migrationsFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return err
 		}
-		if _, err := s.db.Exec(string(body)); err != nil {
+		if err := applyMigration(context.Background(), s.db, name, body); err != nil {
 			return fmt.Errorf("apply %s: %w", name, err)
-		}
-		if _, err := s.db.Exec(
-			`INSERT INTO schema_migrations (version) VALUES (?)`, name,
-		); err != nil {
-			return err
 		}
 	}
 	return nil
 }
 
-func (s *Store) DB() *sql.DB { return s.db }
+// applyMigration keeps the migration body and its version marker in the same
+// transaction. A failed statement therefore leaves neither schema changes nor
+// a misleading schema_migrations row behind.
+func applyMigration(ctx context.Context, db *sql.DB, name string, body []byte) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var exists string
+	err = tx.QueryRowContext(ctx,
+		`SELECT version FROM schema_migrations WHERE version = ?`, name,
+	).Scan(&exists)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, string(body)); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO schema_migrations (version) VALUES (?)`, name,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) DB() *sql.DB  { return s.db }
 func (s *Store) Close() error { return s.db.Close() }

@@ -11,6 +11,7 @@ import (
 const (
 	EnvPending             = "pending"
 	EnvPreviewing          = "previewing"
+	EnvDestroyPreviewing   = "destroy_previewing"
 	EnvPreviewReady        = "preview_ready"
 	EnvProvisioning        = "provisioning"
 	EnvUp                  = "up"
@@ -30,6 +31,7 @@ type Environment struct {
 	Region         string
 	Snapshot       provisioner.BlueprintParams
 	Status         string
+	ResumeStatus   string
 	Outputs        map[string]any
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -46,9 +48,9 @@ func (s *Store) CreateEnvironment(ctx context.Context, e Environment) (int64, er
 	}
 	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO environments
-		 (blueprint_id, cloud_account_id, name, pulumi_stack, region, blueprint_snapshot_json, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.BlueprintID, e.CloudAccountID, e.Name, e.PulumiStack, e.Region, string(snap), e.Status)
+		 (blueprint_id, cloud_account_id, name, pulumi_stack, region, blueprint_snapshot_json, status, resume_status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.BlueprintID, e.CloudAccountID, e.Name, e.PulumiStack, e.Region, string(snap), e.Status, e.ResumeStatus)
 	if err != nil {
 		return 0, err
 	}
@@ -56,15 +58,38 @@ func (s *Store) CreateEnvironment(ctx context.Context, e Environment) (int64, er
 }
 
 func (s *Store) GetEnvironment(ctx context.Context, id int64) (Environment, error) {
+	return scanEnvironment(s.db.QueryRowContext(ctx,
+		`SELECT `+environmentCols+` FROM environments WHERE id = ?`, id))
+}
+
+func (s *Store) ListEnvironments(ctx context.Context) ([]Environment, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+environmentCols+` FROM environments ORDER BY id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Environment
+	for rows.Next() {
+		e, err := scanEnvironment(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+const environmentCols = `id, blueprint_id, cloud_account_id, name, pulumi_stack, region,
+	blueprint_snapshot_json, status, resume_status, outputs_json, created_at, updated_at`
+
+func scanEnvironment(sc interface{ Scan(...any) error }) (Environment, error) {
 	var e Environment
 	var snap, outputs string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, blueprint_id, cloud_account_id, name, pulumi_stack, region,
-		        blueprint_snapshot_json, status, outputs_json, created_at, updated_at
-		 FROM environments WHERE id = ?`, id,
-	).Scan(&e.ID, &e.BlueprintID, &e.CloudAccountID, &e.Name, &e.PulumiStack, &e.Region,
-		&snap, &e.Status, &outputs, &e.CreatedAt, &e.UpdatedAt)
-	if err != nil {
+	if err := sc.Scan(
+		&e.ID, &e.BlueprintID, &e.CloudAccountID, &e.Name, &e.PulumiStack, &e.Region,
+		&snap, &e.Status, &e.ResumeStatus, &outputs, &e.CreatedAt, &e.UpdatedAt,
+	); err != nil {
 		return Environment{}, err
 	}
 	if err := json.Unmarshal([]byte(snap), &e.Snapshot); err != nil {
@@ -77,33 +102,6 @@ func (s *Store) GetEnvironment(ctx context.Context, id int64) (Environment, erro
 		}
 	}
 	return e, nil
-}
-
-func (s *Store) ListEnvironments(ctx context.Context) ([]Environment, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, blueprint_id, cloud_account_id, name, pulumi_stack, region,
-		        blueprint_snapshot_json, status, outputs_json, created_at, updated_at
-		 FROM environments ORDER BY id DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Environment
-	for rows.Next() {
-		var e Environment
-		var snap, outputs string
-		if err := rows.Scan(&e.ID, &e.BlueprintID, &e.CloudAccountID, &e.Name, &e.PulumiStack,
-			&e.Region, &snap, &e.Status, &outputs, &e.CreatedAt, &e.UpdatedAt); err != nil {
-			return nil, err
-		}
-		_ = json.Unmarshal([]byte(snap), &e.Snapshot)
-		e.Snapshot.ApplyDefaults()
-		if outputs != "" {
-			_ = json.Unmarshal([]byte(outputs), &e.Outputs)
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
 }
 
 func (s *Store) UpdateEnvironmentStatus(ctx context.Context, id int64, status string) error {
