@@ -29,7 +29,9 @@ func NewRenderer() (*Renderer, error) {
 	pageFiles := map[string]string{
 		"login":              "templates/login.html",
 		"accounts":           "templates/accounts.html",
+		"account_form":       "templates/account_form.html",
 		"projects":           "templates/projects.html",
+		"project_form":       "templates/project_form.html",
 		"blueprints":         "templates/blueprints.html",
 		"environments":       "templates/environments.html",
 		"environment_detail": "templates/environment_detail.html",

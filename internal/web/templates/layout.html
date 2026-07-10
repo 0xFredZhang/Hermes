@@ -3,28 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hermes</title>
+  <title>{{if .PageTitle}}{{.PageTitle}} · {{end}}Hermes</title>
   <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
 </head>
-<body class="app-shell">
+<body class="app-shell{{if .HideNav}} login-shell{{end}}">
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div class="app-frame">
     <header class="app-header">
       <div class="brand-block">
         <h1 class="brand-title">Hermes</h1>
         <p class="brand-subtitle">自托管 AWS 资源编排控制台</p>
       </div>
-      <nav class="top-nav" aria-label="主导航">
-        <a class="nav-link" href="/accounts">账号</a>
-        <a class="nav-link" href="/projects">项目</a>
-        <a class="nav-link" href="/blueprints">蓝图</a>
-        <a class="nav-link" href="/environments">环境</a>
+      {{if not .HideNav}}<nav class="top-nav" aria-label="主导航">
+        <a class="nav-link{{if eq .ActiveNav "accounts"}} nav-link-active{{end}}" href="/accounts"{{if eq .ActiveNav "accounts"}} aria-current="page"{{end}}>账号</a>
+        <a class="nav-link{{if eq .ActiveNav "projects"}} nav-link-active{{end}}" href="/projects"{{if eq .ActiveNav "projects"}} aria-current="page"{{end}}>项目</a>
+        <a class="nav-link{{if eq .ActiveNav "blueprints"}} nav-link-active{{end}}" href="/blueprints"{{if eq .ActiveNav "blueprints"}} aria-current="page"{{end}}>蓝图</a>
+        <a class="nav-link{{if eq .ActiveNav "environments"}} nav-link-active{{end}}" href="/environments"{{if eq .ActiveNav "environments"}} aria-current="page"{{end}}>环境</a>
         <form class="logout-form" method="post" action="/logout"><button class="button-muted">退出</button></form>
-      </nav>
+      </nav>{{end}}
     </header>
-    <main class="app-main">
+    <main class="app-main" id="main-content" tabindex="-1">
       {{template "content" .}}
     </main>
   </div>
+  {{if not .HideNav}}<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form class="confirm-dialog" method="dialog">
+      <h2 class="section-title" id="confirm-title">确认操作</h2>
+      <p id="confirm-message">此操作需要确认。</p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" type="button" value="cancel">取消</button>
+        <button class="button-danger" id="confirm-submit" type="button" value="confirm">确认</button>
+      </div>
+    </form>
+  </dialog>{{end}}
 </body>
 </html>{{end}}

@@ -28,11 +28,9 @@ func testDeps(t *testing.T) Deps {
 	if err != nil {
 		t.Fatalf("web.NewRenderer: %v", err)
 	}
-	// validator that always succeeds with a fixed identity
-	v := &cloud.Validator{NewClient: nil}
-	v.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
+	v := &cloud.Validator{ValidateFunc: func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
 		return cloud.Identity{AccountID: "123456789012", ARN: "arn:aws:iam::123456789012:user/x"}, nil
-	}
+	}}
 	return Deps{
 		Store:     s,
 		Validator: v,
@@ -54,24 +52,204 @@ func authedCreate(t *testing.T, deps Deps, form url.Values) *httptest.ResponseRe
 	return rec
 }
 
-func TestCreateAccount_ValidatesAndPersists(t *testing.T) {
-	deps := testDeps(t)
-	form := url.Values{
+func validAccountForm() url.Values {
+	return url.Values{
 		"name":              {"prod"},
 		"default_region":    {"ap-southeast-1"},
-		"access_key_id":     {"AKIA"},
-		"secret_access_key": {"secret"},
+		"access_key_id":     {"AKIAEXAMPLE"},
+		"secret_access_key": {"test-secret-value"},
 	}
-	rec := authedCreate(t, deps, form)
+}
+
+func TestAccountListContainsDataButNoCreateForm(t *testing.T) {
+	deps := testDeps(t)
+	_, err := deps.Store.CreateCloudAccount(context.Background(), store.CloudAccount{
+		Name: "prod-main", DefaultRegion: "ap-southeast-1", AccessKeyID: "AKIALIST",
+		SecretAccessKey: "stored-only", AWSAccountID: "210987654321",
+		ARN: "arn:aws:iam::210987654321:user/list",
+	})
+	if err != nil {
+		t.Fatalf("CreateCloudAccount: %v", err)
+	}
+
+	rec := authedGet(t, deps, "/accounts")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "123456789012") {
-		t.Fatalf("response should show validated account id; got %s", rec.Body.String())
+	body := rec.Body.String()
+	for _, want := range []string{"prod-main", "210987654321", `href="/accounts/new"`, `class="table-wrap responsive-table-wrap"`, `class="data-table responsive-table"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("account list missing %q", want)
+		}
+	}
+	for _, forbidden := range []string{`name="secret_access_key"`, `name="default_region"`, `action="/accounts"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("account list unexpectedly contains create control %q", forbidden)
+		}
+	}
+}
+
+func TestNewAccountPageRendersDedicatedForm(t *testing.T) {
+	deps := testDeps(t)
+	rec := authedGet(t, deps, "/accounts/new")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`action="/accounts"`, `method="post"`, `name="name"`, `name="default_region"`,
+		`name="access_key_id"`, `name="secret_access_key"`, `type="password"`,
+		`autocomplete="new-password"`, `data-password-toggle`, `href="/accounts"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("new account page missing %q", want)
+		}
+	}
+}
+
+func TestCreateAccountStoresDefaultRegion(t *testing.T) {
+	deps := testDeps(t)
+	var validateCalls int
+	deps.Validator.ValidateFunc = func(_ context.Context, accessKey, secret, region string) (cloud.Identity, error) {
+		validateCalls++
+		if accessKey != "AKIAEXAMPLE" || secret == "" || region != validationRegion {
+			t.Error("validator received unexpected credential fields")
+		}
+		return cloud.Identity{AccountID: "123456789012", ARN: "arn:aws:iam::123456789012:user/x"}, nil
+	}
+	form := validAccountForm()
+	form.Set("name", "  prod  ")
+	form.Set("default_region", "  ap-southeast-1  ")
+
+	rec := authedCreate(t, deps, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if location := rec.Header().Get("Location"); location != "/accounts" {
+		t.Fatalf("Location = %q, want /accounts", location)
+	}
+	if validateCalls != 1 {
+		t.Fatalf("validator calls = %d, want 1", validateCalls)
+	}
+	list, err := deps.Store.ListCloudAccounts(context.Background())
+	if err != nil {
+		t.Fatalf("ListCloudAccounts: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("accounts = %d, want 1", len(list))
+	}
+	if list[0].Name != "prod" || list[0].DefaultRegion != "ap-southeast-1" {
+		t.Fatalf("stored account name/region = %q/%q", list[0].Name, list[0].DefaultRegion)
+	}
+}
+
+func TestCreateAccountValidationPreservesSafeFieldsOnly(t *testing.T) {
+	deps := testDeps(t)
+	const submittedSecret = "must-not-appear-in-response"
+	deps.Validator.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
+		return cloud.Identity{}, errors.New("credential failure: " + submittedSecret)
+	}
+	form := url.Values{
+		"name":              {"  prod-edge  "},
+		"default_region":    {"  ap-southeast-2  "},
+		"access_key_id":     {"AKIA-SAFE-ID"},
+		"secret_access_key": {submittedSecret},
+	}
+
+	rec := authedCreate(t, deps, form)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`value="prod-edge"`, `value="ap-southeast-2"`, `value="AKIA-SAFE-ID"`, `type="password"`, `role="alert"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("validation response missing safe form field %q", want)
+		}
+	}
+	if strings.Contains(body, submittedSecret) {
+		t.Fatal("validation response exposed the submitted secret")
 	}
 	list, _ := deps.Store.ListCloudAccounts(context.Background())
-	if len(list) != 1 || list[0].Name != "prod" {
-		t.Fatalf("account not persisted: %+v", list)
+	if len(list) != 0 {
+		t.Fatalf("accounts = %d, want 0 after validation failure", len(list))
+	}
+}
+
+func TestCreateAccountRejectsInvalidFieldsBeforeCredentialValidation(t *testing.T) {
+	deps := testDeps(t)
+	var validateCalls int
+	deps.Validator.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
+		validateCalls++
+		return cloud.Identity{}, nil
+	}
+	form := validAccountForm()
+	form.Set("name", strings.Repeat("x", 129))
+	form.Set("default_region", " ")
+
+	rec := authedCreate(t, deps, form)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rec.Code)
+	}
+	if validateCalls != 0 {
+		t.Fatalf("validator calls = %d, want 0", validateCalls)
+	}
+	if strings.Contains(rec.Body.String(), form.Get("secret_access_key")) {
+		t.Fatal("invalid form response exposed the submitted secret")
+	}
+}
+
+func TestCreateAccountCountsMultibyteAliasInCharacters(t *testing.T) {
+	tests := []struct {
+		name          string
+		aliasRunes    int
+		wantStatus    int
+		wantValidates int
+	}{
+		{name: "below limit", aliasRunes: 127, wantStatus: http.StatusSeeOther, wantValidates: 1},
+		{name: "at limit", aliasRunes: 128, wantStatus: http.StatusSeeOther, wantValidates: 1},
+		{name: "over limit", aliasRunes: 129, wantStatus: http.StatusUnprocessableEntity, wantValidates: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := testDeps(t)
+			validateCalls := 0
+			deps.Validator.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
+				validateCalls++
+				return cloud.Identity{AccountID: "123456789012", ARN: "arn:aws:iam::123456789012:user/x"}, nil
+			}
+			form := validAccountForm()
+			form.Set("name", "  "+strings.Repeat("账", tt.aliasRunes)+"  ")
+
+			rec := authedCreate(t, deps, form)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if validateCalls != tt.wantValidates {
+				t.Fatalf("validator calls = %d, want %d", validateCalls, tt.wantValidates)
+			}
+		})
+	}
+}
+
+func TestCreateAccountDuplicateReturnsConflictForm(t *testing.T) {
+	deps := testDeps(t)
+	form := validAccountForm()
+	if rec := authedCreate(t, deps, form); rec.Code != http.StatusSeeOther {
+		t.Fatalf("first create status = %d, want 303", rec.Code)
+	}
+	rec := authedCreate(t, deps, form)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want 409", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "已添加") {
+		t.Fatal("duplicate response should explain the conflict")
+	}
+	if strings.Contains(rec.Body.String(), form.Get("secret_access_key")) {
+		t.Fatal("duplicate response exposed the submitted secret")
+	}
+	list, _ := deps.Store.ListCloudAccounts(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("accounts = %d, want 1 after duplicate", len(list))
 	}
 }
 
@@ -86,57 +264,17 @@ func TestCreateAccount_RequiresAuth(t *testing.T) {
 	}
 }
 
-func TestCreateAccount_InvalidCredentials(t *testing.T) {
+func TestDeepPageMarksActiveNavigation(t *testing.T) {
 	deps := testDeps(t)
-	// Override validator to fail
-	deps.Validator.ValidateFunc = func(_ context.Context, _, _, _ string) (cloud.Identity, error) {
-		return cloud.Identity{}, errors.New("InvalidClientTokenId")
-	}
-	form := url.Values{
-		"name":              {"prod"},
-		"default_region":    {"ap-southeast-1"},
-		"access_key_id":     {"AKIA"},
-		"secret_access_key": {"bad"},
-	}
-	rec := authedCreate(t, deps, form)
-	// Should return 200 so htmx swaps the error row
+	rec := authedGet(t, deps, "/accounts/new")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	// Response should contain the error message
-	if !strings.Contains(rec.Body.String(), "凭证验证失败") {
-		t.Fatalf("response should contain validation error; got %s", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, `href="/accounts" aria-current="page"`) {
+		t.Fatal("deep account page should mark Accounts as the active navigation item")
 	}
-	// Account should not be persisted
-	list, _ := deps.Store.ListCloudAccounts(context.Background())
-	if len(list) != 0 {
-		t.Fatalf("account should not be persisted on validation failure; got %d accounts", len(list))
-	}
-}
-
-func TestCreateAccount_Duplicate(t *testing.T) {
-	deps := testDeps(t)
-	form := url.Values{
-		"name":              {"prod"},
-		"default_region":    {"ap-southeast-1"},
-		"access_key_id":     {"AKIA"},
-		"secret_access_key": {"secret"},
-	}
-	// First add succeeds.
-	if rec := authedCreate(t, deps, form); rec.Code != http.StatusOK {
-		t.Fatalf("first add: status = %d", rec.Code)
-	}
-	// Second add of the same validated AWS account is rejected with a friendly
-	// message (200 so htmx swaps it), and no second row is persisted.
-	rec := authedCreate(t, deps, form)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("second add: status = %d, want 200", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "已添加") {
-		t.Fatalf("second add should show duplicate message; got %s", rec.Body.String())
-	}
-	list, _ := deps.Store.ListCloudAccounts(context.Background())
-	if len(list) != 1 {
-		t.Fatalf("duplicate must not create a second account; got %d", len(list))
+	if strings.Count(body, `aria-current="page"`) != 1 {
+		t.Fatalf("active navigation count = %d, want 1", strings.Count(body, `aria-current="page"`))
 	}
 }

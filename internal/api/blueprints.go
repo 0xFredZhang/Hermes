@@ -48,6 +48,7 @@ func renderBlueprints(w http.ResponseWriter, r *http.Request, d Deps, errMsg str
 	projects, _ := d.Store.ListProjects(r.Context())
 	accounts, _ := d.Store.ListCloudAccounts(r.Context())
 	d.Renderer.Render(w, "blueprints", map[string]any{
+		"PageTitle": "蓝图", "ActiveNav": "blueprints",
 		"Blueprints": blueprints, "Projects": projects, "Accounts": accounts, "Error": errMsg,
 	})
 }

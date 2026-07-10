@@ -59,6 +59,10 @@
     outline: 2px solid color-mix(in srgb, var(--color-console-primary) 78%, white);
     outline-offset: 2px;
   }
+
+  textarea {
+    font: inherit;
+  }
 }
 
 @layer components {
@@ -68,6 +72,14 @@
 
   .app-frame {
     @apply mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8;
+  }
+
+  .skip-link {
+    @apply fixed top-3 left-3 z-50 -translate-y-20 rounded-md bg-console-ink px-3 py-2 font-medium text-white no-underline transition-transform;
+  }
+
+  .skip-link:focus {
+    @apply translate-y-0 text-white no-underline;
   }
 
   .app-header {
@@ -91,7 +103,7 @@
   }
 
   .nav-link {
-    @apply inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-console-muted transition-colors;
+    @apply inline-flex h-11 items-center rounded-md px-3 text-sm font-medium text-console-muted transition-colors;
   }
 
   .nav-link:hover {
@@ -115,7 +127,7 @@
   }
 
   .page-panel {
-    @apply rounded-lg border border-console-border bg-console-surface p-4 shadow-sm shadow-slate-200/60 sm:p-5;
+    @apply bg-transparent;
   }
 
   .page-header {
@@ -136,6 +148,42 @@
 
   .back-link {
     @apply mb-3 inline-flex items-center text-sm font-medium text-console-primary;
+  }
+
+  .form-surface {
+    @apply max-w-3xl;
+  }
+
+  .login-panel {
+    @apply mx-auto mt-8 w-full max-w-md sm:mt-16;
+  }
+
+  .login-shell .app-header {
+    @apply justify-center text-center;
+  }
+
+  .login-shell .brand-subtitle {
+    @apply hidden;
+  }
+
+  .form-page {
+    @apply max-w-2xl;
+  }
+
+  .field-block {
+    @apply mb-5;
+  }
+
+  .field-label {
+    @apply block text-sm font-medium text-console-ink;
+  }
+
+  .field-hint {
+    @apply mt-1 text-sm text-console-muted;
+  }
+
+  .field-error {
+    @apply mt-1 text-sm font-medium text-console-danger;
   }
 
   .stack-label {
@@ -170,15 +218,17 @@
   .field > select,
   .input-control,
   input:not([type="checkbox"]),
-  select {
-    @apply mt-1 min-h-10 w-full rounded-md border border-console-border bg-white px-3 py-2 text-sm text-console-ink transition-colors placeholder:text-console-muted;
+  select,
+  textarea {
+    @apply mt-1 min-h-11 w-full rounded-md border border-console-border bg-white px-3 py-2 text-base text-console-ink transition-colors placeholder:text-console-muted sm:text-sm;
   }
 
   .field > input:not([type="checkbox"]):focus,
   .field > select:focus,
   .input-control:focus,
   input:not([type="checkbox"]):focus,
-  select:focus {
+  select:focus,
+  textarea:focus {
     @apply border-console-primary outline-none ring-2 ring-console-primary/20;
   }
 
@@ -192,7 +242,7 @@
 
   .button,
   button {
-    @apply inline-flex min-h-9 items-center justify-center rounded-md border border-console-border bg-white px-3 py-2 text-sm font-medium text-console-ink transition-colors;
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-border bg-white px-3 py-2 text-sm font-medium text-console-ink transition-colors;
   }
 
   .button:hover,
@@ -236,6 +286,22 @@
 
   .action-group {
     @apply flex flex-wrap items-center gap-2;
+  }
+
+  .form-actions {
+    @apply flex flex-wrap items-center gap-3 pt-1;
+  }
+
+  .password-control {
+    @apply mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-2;
+  }
+
+  .password-control input {
+    @apply mt-0;
+  }
+
+  .password-toggle {
+    @apply min-w-16;
   }
 
   .notice {
@@ -282,6 +348,10 @@
     @apply mt-4 overflow-x-auto rounded-lg border border-console-border;
   }
 
+  .long-value {
+    overflow-wrap: anywhere;
+  }
+
   .data-table {
     @apply w-full border-collapse bg-white text-left text-sm;
   }
@@ -317,6 +387,86 @@
   .htmx-request .htmx-indicator,
   .htmx-request.htmx-indicator {
     @apply opacity-100;
+  }
+
+  dialog {
+    @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-md border border-console-border bg-console-surface p-0 text-console-ink;
+  }
+
+  dialog::backdrop {
+    background: rgb(17 24 39 / 52%);
+  }
+
+  .confirm-dialog {
+    @apply p-5;
+  }
+
+  .confirm-dialog .section-title {
+    @apply mt-0;
+  }
+
+  .dialog-actions {
+    @apply mt-5 flex justify-end gap-3;
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .responsive-table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .responsive-table tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .responsive-table tbody tr {
+    overflow: hidden;
+    border: 1px solid var(--color-console-border);
+    border-radius: 6px;
+    background: var(--color-console-surface);
+  }
+
+  .responsive-table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 38%) minmax(0, 1fr);
+    gap: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-console-muted);
+  }
+
+  .responsive-table .empty-row {
+    display: block;
+  }
+
+  .responsive-table .empty-row::before {
+    content: none;
   }
 }
 

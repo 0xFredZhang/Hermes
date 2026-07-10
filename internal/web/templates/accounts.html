@@ -1,29 +1,16 @@
 {{define "content"}}
-<section class="page-panel">
+<section class="page-panel" aria-labelledby="accounts-title">
   <div class="page-header">
     <div>
-      <h2 class="page-title">AWS 云账号</h2>
-      <p class="page-description">保存并验证 AWS 凭证。Secret Key 会加密落库，只在执行任务时解密使用。</p>
+      <h2 class="page-title" id="accounts-title">AWS 云账号</h2>
+      <p class="page-description">管理用于蓝图和环境部署的 AWS 账号。</p>
     </div>
+    <a class="button button-primary" href="/accounts/new">添加账号</a>
   </div>
-  {{if .Error}}<p class="notice err">{{.Error}}</p>{{end}}
-  <form class="form-row" hx-post="/accounts" hx-target="#rows" hx-swap="innerHTML"
-        hx-disabled-elt="find button" hx-indicator="#add-status">
-    <label class="field">别名
-      <input name="name" placeholder="prod-main" required>
-    </label>
-    <label class="field">Access Key ID
-      <input name="access_key_id" placeholder="AKIA..." required>
-    </label>
-    <label class="field">Secret Access Key
-      <input name="secret_access_key" placeholder="Secret Access Key" required>
-    </label>
-    <button class="button-primary" type="submit">添加并验证</button>
-    <span id="add-status" class="htmx-indicator status-line">验证中…</span>
-  </form>
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead><tr><th>别名</th><th>Account ID</th><th>ARN</th><th>操作</th></tr></thead>
+  <div class="table-wrap responsive-table-wrap">
+    <table class="data-table responsive-table">
+      <caption class="sr-only">AWS 云账号列表</caption>
+      <thead><tr><th scope="col">别名</th><th scope="col">默认区域</th><th scope="col">Account ID</th><th scope="col">ARN</th><th scope="col">操作</th></tr></thead>
       <tbody id="rows">{{template "rows" .Accounts}}</tbody>
     </table>
   </div>

@@ -1,11 +1,11 @@
 {{define "project_rows"}}
 {{range .}}
 <tr>
-  <td>{{.Name}}</td><td>{{.Description}}</td>
-  <td><button class="button-danger" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除该项目?">删除</button></td>
+  <td data-label="名称">{{.Name}}</td><td data-label="描述">{{.Description}}</td>
+  <td data-label="操作"><button class="button-danger" type="button" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除项目“{{.Name}}”？">删除</button></td>
 </tr>
 {{else}}
-<tr><td colspan="3" class="empty-row">暂无项目，先创建一个项目作为蓝图分组。</td></tr>
+<tr><td colspan="3" class="empty-row">暂无项目。<a href="/projects/new">新建项目</a>后即可组织蓝图。</td></tr>
 {{end}}
 {{end}}
 

@@ -12,7 +12,7 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRenderer: %v", err)
 	}
-	for _, name := range []string{"login", "accounts", "projects", "blueprints", "environments", "environment_detail"} {
+	for _, name := range []string{"login", "accounts", "account_form", "projects", "project_form", "blueprints", "environments", "environment_detail"} {
 		if r.pages[name] == nil {
 			t.Fatalf("page %q not parsed", name)
 		}
@@ -24,9 +24,25 @@ func TestStaticAppCSSIsEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("static app stylesheet must be embedded: %v", err)
 	}
-	for _, want := range []string{"tailwindcss", ".app-shell"} {
+	for _, want := range []string{
+		"tailwindcss", ".app-shell", ".skip-link", ".form-surface", ".password-control",
+		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`,
+		`@media (max-width:39.999rem){.responsive-table-wrap{border:0`,
+	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
+		}
+	}
+}
+
+func TestStaticAppJSIsEmbeddedWithProgressiveEnhancements(t *testing.T) {
+	js, err := StaticFS.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("static app script must be embedded: %v", err)
+	}
+	for _, want := range []string{"data-password-toggle", "htmx:confirm", "showModal", "aria-pressed"} {
+		if !strings.Contains(string(js), want) {
+			t.Fatalf("static app script missing %q", want)
 		}
 	}
 }
@@ -42,6 +58,55 @@ func TestRenderLayoutLoadsAppStylesheet(t *testing.T) {
 	for _, want := range []string{`href="/static/app.css"`, `class="app-shell"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("layout output missing %q: %s", want, out)
+		}
+	}
+}
+
+func TestLoginLayoutHidesAuthenticatedNavigation(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	w := httptest.NewRecorder()
+	r.Render(w, "login", map[string]any{
+		"PageTitle": "登录",
+		"HideNav":   true,
+		"Error":     "口令错误",
+	})
+	body := w.Body.String()
+	for _, forbidden := range []string{`aria-label="主导航"`, `action="/logout"`, `id="confirm-dialog"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("login shell unexpectedly contains authenticated UI %q", forbidden)
+		}
+	}
+	if !strings.Contains(body, `<title>登录 · Hermes</title>`) {
+		t.Fatal("login layout should render the supplied page title")
+	}
+	for _, want := range []string{`autocomplete="current-password"`, `role="alert"`, `required`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("login form missing %q", want)
+		}
+	}
+}
+
+func TestLayoutProvidesSkipLinkAndDialog(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	w := httptest.NewRecorder()
+	r.Render(w, "accounts", map[string]any{
+		"PageTitle": "AWS 云账号",
+		"ActiveNav": "accounts",
+	})
+	body := w.Body.String()
+	for _, want := range []string{
+		`href="#main-content"`, `id="main-content"`, `<dialog id="confirm-dialog"`,
+		`aria-labelledby="confirm-title"`, `id="confirm-cancel" type="button"`, `id="confirm-submit" type="button"`,
+		`src="/static/app.js"`, `defer`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("layout missing %q", want)
 		}
 	}
 }

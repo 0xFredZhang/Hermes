@@ -21,7 +21,11 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		d.Renderer.Render(w, "environments", map[string]any{"Environments": list})
+		d.Renderer.Render(w, "environments", map[string]any{
+			"PageTitle":    "环境",
+			"ActiveNav":    "environments",
+			"Environments": list,
+		})
 	})
 	mux.HandleFunc("GET /environments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -180,6 +184,7 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 	// Initialize every key the templates reference so missing values render as
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
+		"PageTitle": "环境详情", "ActiveNav": "environments",
 		"Env": env, "CurrentJobActive": false,
 		"CurrentJobStreamURL": "", "CurrentLogs": "", "Plan": "",
 		"DestroyPlan": "",

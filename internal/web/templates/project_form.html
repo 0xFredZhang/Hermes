@@ -1,0 +1,29 @@
+{{define "content"}}
+<section class="page-panel form-surface" aria-labelledby="project-form-title">
+  <a class="back-link" href="/projects">返回项目列表</a>
+  <div class="page-header">
+    <div>
+      <h2 class="page-title" id="project-form-title">新建项目</h2>
+      <p class="page-description">项目用于归类同一应用或阶段的蓝图和环境。</p>
+    </div>
+  </div>
+  {{if .Error}}<p class="notice err" role="alert">{{.Error}}</p>{{end}}
+  <form class="form-page" method="post" action="/projects">
+    <div class="field-block">
+      <label class="field-label" for="project-name">项目名</label>
+      <input id="project-name" name="name" value="{{.Name}}" maxlength="128" autocomplete="off" required{{with index .FieldErrors "name"}} aria-invalid="true" aria-describedby="project-name-error"{{end}}>
+      {{with index .FieldErrors "name"}}<p class="field-error" id="project-name-error">{{.}}</p>{{end}}
+    </div>
+    <div class="field-block">
+      <label class="field-label" for="project-description">描述</label>
+      <textarea id="project-description" name="description" maxlength="1000" rows="4"{{with index .FieldErrors "description"}} aria-invalid="true" aria-describedby="project-description-error"{{end}}>{{.Description}}</textarea>
+      <p class="field-hint">可选。简要说明应用、团队或环境阶段。</p>
+      {{with index .FieldErrors "description"}}<p class="field-error" id="project-description-error">{{.}}</p>{{end}}
+    </div>
+    <div class="form-actions">
+      <button class="button-primary" type="submit">创建项目</button>
+      <a class="button" href="/projects">取消</a>
+    </div>
+  </form>
+</section>
+{{end}}
