@@ -37,6 +37,16 @@ type JobCompletion struct {
 	ClearResumeStatus bool
 }
 
+// StartedJobFailure is the narrow terminal transition used when a worker has
+// claimed a persisted job whose action is not part of the lifecycle contract.
+type StartedJobFailure struct {
+	JobID                     int64
+	EnvironmentID             int64
+	ExpectedEnvironmentStatus string
+	Logs                      string
+	Error                     string
+}
+
 // EnqueueJobTransition creates the queued job and moves its environment to the
 // action's transient state in one transaction. The partial unique index on
 // active jobs is the final concurrency guard; a conflict rolls back both rows.
@@ -237,6 +247,50 @@ func (s *Store) CompleteJob(ctx context.Context, in JobCompletion) error {
 		return err
 	} else if !ok {
 		return fmt.Errorf("%w: job %d changed while completing", ErrStaleTransition, in.JobID)
+	}
+
+	return tx.Commit()
+}
+
+// FailStartedJob atomically fails a running job and its environment without
+// interpreting the job action. Normal known actions must use CompleteJob.
+func (s *Store) FailStartedJob(ctx context.Context, in StartedJobFailure) error {
+	if in.JobID == 0 || in.EnvironmentID == 0 || in.ExpectedEnvironmentStatus == "" || strings.TrimSpace(in.Error) == "" {
+		return fmt.Errorf("%w: started job failure requires job, environment, expected state, and error", ErrInvalidCompletion)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE environments SET status = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND status = ?`,
+		EnvFailed, in.EnvironmentID, in.ExpectedEnvironmentStatus,
+	)
+	if err != nil {
+		return err
+	}
+	if ok, err := changedExactlyOne(res); err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("%w: environment %d is no longer %q", ErrStaleTransition, in.EnvironmentID, in.ExpectedEnvironmentStatus)
+	}
+
+	res, err = tx.ExecContext(ctx,
+		`UPDATE jobs
+		 SET status = ?, logs = ?, error = ?, finished_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND environment_id = ? AND status = ?`,
+		JobFailed, in.Logs, in.Error, in.JobID, in.EnvironmentID, JobRunning,
+	)
+	if err != nil {
+		return err
+	}
+	if ok, err := changedExactlyOne(res); err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("%w: job %d no longer matches a running failure", ErrStaleTransition, in.JobID)
 	}
 
 	return tx.Commit()

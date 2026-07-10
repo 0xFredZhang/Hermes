@@ -40,15 +40,84 @@ func TestBrokerWriteSubscribeClose(t *testing.T) {
 	if _, ok := <-ch; ok {
 		t.Fatal("subscriber channel should be closed after Close")
 	}
+	b.mu.Lock()
+	_, retained := b.topics[1]
+	b.mu.Unlock()
+	if retained {
+		t.Fatal("closed topic retained in broker map")
+	}
+	if got := b.Snapshot(1); got != "" {
+		t.Fatalf("Snapshot after close = %q, want released log data", got)
+	}
+}
 
-	hist2, ch2, done2, _ := b.Subscribe(1)
-	if !done2 || ch2 != nil {
-		t.Fatal("resubscribe after close should report done with nil channel")
+func TestBrokerCloseReleasesTerminalTopicWithoutBreakingSubscriber(t *testing.T) {
+	b := NewBroker()
+	w := b.Writer(42)
+	history, ch, done, cancel := b.Subscribe(42)
+	defer cancel()
+	if done || len(history) != 0 {
+		t.Fatalf("initial subscription = history %v done %v", history, done)
 	}
-	if len(hist2) != 3 {
-		t.Fatalf("history after close = %v, want 3 lines", hist2)
+	if _, err := fmt.Fprint(w, "final partial line"); err != nil {
+		t.Fatalf("write: %v", err)
 	}
-	if got := b.Snapshot(1); got != "hello\nworld\nbye" {
-		t.Fatalf("Snapshot = %q", got)
+	if got := b.Snapshot(42); got != "final partial line" {
+		t.Fatalf("snapshot before close = %q, want pending line", got)
+	}
+
+	b.Close(42)
+	select {
+	case line, ok := <-ch:
+		if !ok || line != "final partial line" {
+			t.Fatalf("subscriber terminal line = %q, %v", line, ok)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for terminal line")
+	}
+	if _, ok := <-ch; ok {
+		t.Fatal("subscriber channel remained open")
+	}
+	b.mu.Lock()
+	_, retained := b.topics[42]
+	b.mu.Unlock()
+	if retained {
+		t.Fatal("closed terminal topic retained in broker map")
+	}
+	if got := b.Snapshot(42); got != "" {
+		t.Fatalf("Snapshot after close = %q, want released log data", got)
+	}
+}
+
+func TestBrokerSealRetainsExceptionalLogsAndEndsSubscribers(t *testing.T) {
+	b := NewBroker()
+	w := b.Writer(77)
+	_, current, done, cancel := b.Subscribe(77)
+	defer cancel()
+	if done {
+		t.Fatal("active subscription unexpectedly done")
+	}
+	if _, err := fmt.Fprint(w, "unpersisted terminal line"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	b.Seal(77)
+	if line, ok := <-current; !ok || line != "unpersisted terminal line" {
+		t.Fatalf("current terminal line = %q, %v", line, ok)
+	}
+	if _, ok := <-current; ok {
+		t.Fatal("current subscriber remained open after Seal")
+	}
+	history, future, done, _ := b.Subscribe(77)
+	if !done || future != nil || len(history) != 1 || history[0] != "unpersisted terminal line" {
+		t.Fatalf("future subscription = history %v channel %v done %v", history, future, done)
+	}
+	if got := b.Snapshot(77); got != "unpersisted terminal line" {
+		t.Fatalf("sealed Snapshot = %q", got)
+	}
+
+	b.Close(77)
+	if got := b.Snapshot(77); got != "" {
+		t.Fatalf("released sealed Snapshot = %q, want empty", got)
 	}
 }

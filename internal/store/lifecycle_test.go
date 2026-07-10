@@ -704,6 +704,79 @@ func TestFailOrphanRollsBackOnStaleEnvironment(t *testing.T) {
 	}
 }
 
+func TestFailStartedJobAtomicallyFailsUnknownAction(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+	const startedStatus = "unknown_action_running"
+	if err := s.UpdateEnvironmentStatus(ctx, envID, startedStatus); err != nil {
+		t.Fatalf("UpdateEnvironmentStatus: %v", err)
+	}
+	jobID, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: "unknown"})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if _, _, err := s.StartJob(ctx, jobID); err != nil {
+		t.Fatalf("StartJob: %v", err)
+	}
+
+	err = s.FailStartedJob(ctx, StartedJobFailure{
+		JobID: jobID, EnvironmentID: envID,
+		ExpectedEnvironmentStatus: startedStatus,
+		Logs:                      "ERROR: unsupported action unknown",
+		Error:                     "unsupported action unknown",
+	})
+	if err != nil {
+		t.Fatalf("FailStartedJob: %v", err)
+	}
+	job, _ := s.GetJob(ctx, jobID)
+	if job.Status != JobFailed || job.Error != "unsupported action unknown" || job.Logs == "" || !job.FinishedAt.Valid {
+		t.Fatalf("failed started job = %+v", job)
+	}
+	env, _ := s.GetEnvironment(ctx, envID)
+	if env.Status != EnvFailed {
+		t.Fatalf("environment status = %q, want %q", env.Status, EnvFailed)
+	}
+}
+
+func TestFailStartedJobRollsBackOnStaleEnvironment(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+	const startedStatus = "unknown_action_running"
+	if err := s.UpdateEnvironmentStatus(ctx, envID, startedStatus); err != nil {
+		t.Fatalf("UpdateEnvironmentStatus: %v", err)
+	}
+	jobID, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: "unknown"})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if _, _, err := s.StartJob(ctx, jobID); err != nil {
+		t.Fatalf("StartJob: %v", err)
+	}
+	if err := s.UpdateEnvironmentStatus(ctx, envID, EnvUp); err != nil {
+		t.Fatalf("make environment stale: %v", err)
+	}
+
+	err = s.FailStartedJob(ctx, StartedJobFailure{
+		JobID: jobID, EnvironmentID: envID,
+		ExpectedEnvironmentStatus: startedStatus,
+		Logs:                      "must roll back",
+		Error:                     "unsupported action unknown",
+	})
+	if !errors.Is(err, ErrStaleTransition) {
+		t.Fatalf("FailStartedJob error = %v, want ErrStaleTransition", err)
+	}
+	job, _ := s.GetJob(ctx, jobID)
+	if job.Status != JobRunning || job.Error != "" || job.Logs != "" || job.FinishedAt.Valid {
+		t.Fatalf("job changed despite stale environment: %+v", job)
+	}
+	env, _ := s.GetEnvironment(ctx, envID)
+	if env.Status != EnvUp {
+		t.Fatalf("environment changed despite stale transition: %+v", env)
+	}
+}
+
 func TestMigrationApplicationIsAtomic(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

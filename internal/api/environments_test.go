@@ -26,6 +26,9 @@ func seedEnv(t *testing.T, d Deps) int64 {
 func TestEnvironmentUpEnqueuesJob(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	envID := seedEnv(t, d)
+	if err := d.Store.UpdateEnvironmentStatus(context.Background(), envID, store.EnvPreviewReady); err != nil {
+		t.Fatalf("UpdateEnvironmentStatus: %v", err)
+	}
 
 	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/up", url.Values{})
 	if rec.Code != http.StatusSeeOther {
@@ -118,8 +121,16 @@ func TestRetryReusesFailedAction(t *testing.T) {
 	envID := seedEnv(t, d)
 	ctx := context.Background()
 	// A failed destroy is the most recent job for the environment.
-	jid, _ := d.Store.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionDestroy})
-	_ = d.Store.UpdateJobStatus(ctx, jid, store.JobFailed)
+	if err := d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvFailed); err != nil {
+		t.Fatalf("UpdateEnvironmentStatus: %v", err)
+	}
+	if _, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionDestroy,
+		Status:        store.JobFailed,
+	}); err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
 
 	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/retry", url.Values{})
 	if rec.Code != http.StatusSeeOther {

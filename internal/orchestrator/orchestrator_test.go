@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -130,8 +131,10 @@ func TestRunPreviewSucceeds(t *testing.T) {
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{logLine: "previewing"}, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionPreview})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPending, store.ActionPreview)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	job, _ := st.GetJob(ctx, jobID)
 	if job.Status != store.JobSucceeded {
@@ -152,8 +155,10 @@ func TestRunPreviewWithRDSGeneratesAndStoresPassword(t *testing.T) {
 	prov := &fakeProvisioner{logLine: "previewing rds"}
 	o := New(st, prov, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionPreview})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPending, store.ActionPreview)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if len(prov.previewSpecs) != 1 {
 		t.Fatalf("preview specs = %d, want 1", len(prov.previewSpecs))
@@ -180,8 +185,10 @@ func TestRunPreviewWithRedisAuthGeneratesAndStoresToken(t *testing.T) {
 	prov := &fakeProvisioner{logLine: "previewing redis"}
 	o := New(st, prov, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionPreview})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPending, store.ActionPreview)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if len(prov.previewSpecs) != 1 {
 		t.Fatalf("preview specs = %d, want 1", len(prov.previewSpecs))
@@ -207,8 +214,10 @@ func TestRunDestroyPreviewSucceeds(t *testing.T) {
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{previewDestroyLine: "preview destroy"}, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionDestroyPreview})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvUp, store.ActionDestroyPreview)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	job, _ := st.GetJob(ctx, jobID)
 	if job.Status != store.JobSucceeded {
@@ -231,8 +240,10 @@ func TestRunRefreshSucceeds(t *testing.T) {
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{refreshLine: "refreshing"}, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionRefresh})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvUp, store.ActionRefresh)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	job, _ := st.GetJob(ctx, jobID)
 	if job.Status != store.JobSucceeded {
@@ -277,8 +288,10 @@ func TestRunUpWithRDSReusesExistingPassword(t *testing.T) {
 	}
 	o := New(st, prov, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPreviewReady, store.ActionUp)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if len(prov.upSpecs) != 1 {
 		t.Fatalf("up specs = %d, want 1", len(prov.upSpecs))
@@ -321,8 +334,10 @@ func TestRunUpWithRedisAuthReusesExistingToken(t *testing.T) {
 	}
 	o := New(st, prov, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPreviewReady, store.ActionUp)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if len(prov.upSpecs) != 1 {
 		t.Fatalf("up specs = %d, want 1", len(prov.upSpecs))
@@ -347,8 +362,10 @@ func TestRunUpStoresOutputs(t *testing.T) {
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{outputs: map[string]any{"public_ips": []any{"1.2.3.4"}}}, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPreviewReady, store.ActionUp)
+	if err := o.run(ctx, jobID); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	env, _ := st.GetEnvironment(ctx, envID)
 	if env.Status != store.EnvUp {
@@ -364,8 +381,10 @@ func TestRunUpFailureMarksFailed(t *testing.T) {
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{upErr: fmt.Errorf("boom")}, NewBroker(), 1)
 
-	jobID, _ := st.CreateJob(ctx, store.Job{EnvironmentID: envID, Action: store.ActionUp})
-	o.run(ctx, jobID)
+	jobID := enqueueForRun(t, o, st, envID, store.EnvPreviewReady, store.ActionUp)
+	if err := o.run(ctx, jobID); err == nil {
+		t.Fatal("run error = nil, want provisioner failure")
+	}
 
 	job, _ := st.GetJob(ctx, jobID)
 	if job.Status != store.JobFailed || job.Error == "" {
@@ -377,7 +396,7 @@ func TestRunUpFailureMarksFailed(t *testing.T) {
 	}
 }
 
-func TestEnqueueRejectsBusyEnvironment(t *testing.T) {
+func TestEnqueueRejectsSecondActionAfterTransition(t *testing.T) {
 	st, envID := newSeededStore(t)
 	ctx := context.Background()
 	o := New(st, &fakeProvisioner{}, NewBroker(), 1)
@@ -385,8 +404,8 @@ func TestEnqueueRejectsBusyEnvironment(t *testing.T) {
 	if _, err := o.Enqueue(ctx, envID, store.ActionPreview); err != nil {
 		t.Fatalf("first Enqueue: %v", err)
 	}
-	if _, err := o.Enqueue(ctx, envID, store.ActionUp); err != ErrEnvironmentBusy {
-		t.Fatalf("second Enqueue err = %v, want ErrEnvironmentBusy", err)
+	if _, err := o.Enqueue(ctx, envID, store.ActionUp); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("second Enqueue err = %v, want ErrInvalidTransition", err)
 	}
 }
 
@@ -398,7 +417,9 @@ func TestRecoverOrphans(t *testing.T) {
 	_ = st.UpdateJobStatus(ctx, orphan, store.JobRunning)
 
 	o := New(st, &fakeProvisioner{}, NewBroker(), 1)
-	o.recoverOrphans(ctx)
+	if err := o.recoverOrphans(ctx); err != nil {
+		t.Fatalf("recoverOrphans: %v", err)
+	}
 
 	job, _ := st.GetJob(ctx, orphan)
 	if job.Status != store.JobFailed {
@@ -408,4 +429,20 @@ func TestRecoverOrphans(t *testing.T) {
 	if env.Status != store.EnvFailed {
 		t.Fatalf("env status = %q, want failed", env.Status)
 	}
+}
+
+func enqueueForRun(
+	t *testing.T,
+	o *Orchestrator,
+	st *store.Store,
+	environmentID int64,
+	fromStatus, action string,
+) int64 {
+	t.Helper()
+	setEnvironmentState(t, st, environmentID, fromStatus, "")
+	jobID, err := o.Enqueue(context.Background(), environmentID, action)
+	if err != nil {
+		t.Fatalf("Enqueue %q from %q: %v", action, fromStatus, err)
+	}
+	return jobID
 }

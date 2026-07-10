@@ -68,6 +68,17 @@ func (s *Store) GetJob(ctx context.Context, id int64) (Job, error) {
 		`SELECT `+jobCols+` FROM jobs WHERE id = ?`, id))
 }
 
+func (s *Store) GetLatestFailedJob(ctx context.Context, environmentID int64) (Job, error) {
+	var job Job
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, environment_id, action, status FROM jobs
+		 WHERE environment_id = ? AND status = ?
+		 ORDER BY id DESC LIMIT 1`,
+		environmentID, JobFailed,
+	).Scan(&job.ID, &job.EnvironmentID, &job.Action, &job.Status)
+	return job, err
+}
+
 func (s *Store) ListJobsByEnvironment(ctx context.Context, envID int64) ([]Job, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+jobCols+` FROM jobs WHERE environment_id = ? ORDER BY id DESC`, envID)

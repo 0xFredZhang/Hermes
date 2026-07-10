@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// Broker fans streaming log lines out to SSE subscribers per job, while keeping
-// the full backlog so late subscribers can replay from the start.
+// Broker fans streaming log lines out to SSE subscribers per active job, while
+// keeping an active backlog so late subscribers can replay from the start.
 type Broker struct {
 	mu     sync.Mutex
 	topics map[int64]*topic
@@ -22,7 +22,9 @@ type topic struct {
 	closed  bool
 }
 
-func NewBroker() *Broker { return &Broker{topics: map[int64]*topic{}} }
+func NewBroker() *Broker {
+	return &Broker{topics: map[int64]*topic{}}
+}
 
 func (b *Broker) get(jobID int64) *topic {
 	b.mu.Lock()
@@ -42,6 +44,9 @@ type topicWriter struct{ tp *topic }
 func (w *topicWriter) Write(p []byte) (int, error) {
 	w.tp.mu.Lock()
 	defer w.tp.mu.Unlock()
+	if w.tp.closed {
+		return 0, io.ErrClosedPipe
+	}
 	w.tp.pending = append(w.tp.pending, p...)
 	for {
 		i := bytes.IndexByte(w.tp.pending, '\n')
@@ -67,15 +72,22 @@ func (tp *topic) emit(line string) {
 }
 
 func (b *Broker) Subscribe(jobID int64) (history []string, ch chan string, done bool, cancel func()) {
-	tp := b.get(jobID)
+	b.mu.Lock()
+	tp := b.topics[jobID]
+	if tp == nil {
+		tp = &topic{subs: map[chan string]struct{}{}}
+		b.topics[jobID] = tp
+	}
 	tp.mu.Lock()
-	defer tp.mu.Unlock()
+	b.mu.Unlock()
 	history = append([]string(nil), tp.lines...)
 	if tp.closed {
+		tp.mu.Unlock()
 		return history, nil, true, func() {}
 	}
 	ch = make(chan string, 256)
 	tp.subs[ch] = struct{}{}
+	tp.mu.Unlock()
 	cancel = func() {
 		tp.mu.Lock()
 		defer tp.mu.Unlock()
@@ -88,26 +100,54 @@ func (b *Broker) Subscribe(jobID int64) (history []string, ch chan string, done 
 }
 
 func (b *Broker) Close(jobID int64) {
-	tp := b.get(jobID)
-	tp.mu.Lock()
-	defer tp.mu.Unlock()
-	if tp.closed {
+	b.finish(jobID, true)
+}
+
+// Seal ends all subscriptions but retains an exceptional job's log backlog.
+// Close releases the sealed topic after terminal persistence is confirmed.
+func (b *Broker) Seal(jobID int64) {
+	b.finish(jobID, false)
+}
+
+func (b *Broker) finish(jobID int64, release bool) {
+	b.mu.Lock()
+	tp := b.topics[jobID]
+	if tp == nil {
+		b.mu.Unlock()
 		return
 	}
-	if len(tp.pending) > 0 {
-		tp.emit(string(tp.pending))
-		tp.pending = nil
+	tp.mu.Lock()
+	if !tp.closed {
+		if len(tp.pending) > 0 {
+			tp.emit(string(tp.pending))
+			tp.pending = nil
+		}
+		tp.closed = true
+		for ch := range tp.subs {
+			delete(tp.subs, ch)
+			close(ch)
+		}
 	}
-	tp.closed = true
-	for ch := range tp.subs {
-		delete(tp.subs, ch)
-		close(ch)
+	if release {
+		delete(b.topics, jobID)
 	}
+	tp.mu.Unlock()
+	b.mu.Unlock()
 }
 
 func (b *Broker) Snapshot(jobID int64) string {
-	tp := b.get(jobID)
+	b.mu.Lock()
+	tp := b.topics[jobID]
+	if tp == nil {
+		b.mu.Unlock()
+		return ""
+	}
 	tp.mu.Lock()
+	b.mu.Unlock()
 	defer tp.mu.Unlock()
-	return strings.Join(tp.lines, "\n")
+	lines := append([]string(nil), tp.lines...)
+	if len(tp.pending) > 0 {
+		lines = append(lines, string(tp.pending))
+	}
+	return strings.Join(lines, "\n")
 }

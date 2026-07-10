@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -111,5 +114,82 @@ func TestOneActiveJobPerEnv(t *testing.T) {
 	_ = s.UpdateJobStatus(ctx, jobs[0].ID, JobSucceeded)
 	if _, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp}); err != nil {
 		t.Fatalf("job after terminal should be allowed: %v", err)
+	}
+}
+
+func TestGetLatestFailedJobSkipsNewerNonFailedJobs(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+
+	olderFailed, err := s.CreateJob(ctx, Job{
+		EnvironmentID: envID,
+		Action:        ActionDestroy,
+		Status:        JobFailed,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob older failed: %v", err)
+	}
+	if _, err := s.CreateJob(ctx, Job{
+		EnvironmentID: envID,
+		Action:        ActionUp,
+		Status:        JobSucceeded,
+	}); err != nil {
+		t.Fatalf("CreateJob newer succeeded: %v", err)
+	}
+
+	got, err := s.GetLatestFailedJob(ctx, envID)
+	if err != nil {
+		t.Fatalf("GetLatestFailedJob: %v", err)
+	}
+	if got.ID != olderFailed || got.Action != ActionDestroy || got.Status != JobFailed {
+		t.Fatalf("GetLatestFailedJob = %+v, want failed destroy job %d", got, olderFailed)
+	}
+
+	env, err := s.GetEnvironment(ctx, envID)
+	if err != nil {
+		t.Fatalf("GetEnvironment: %v", err)
+	}
+	otherEnvID, err := s.CreateEnvironment(ctx, Environment{
+		BlueprintID: env.BlueprintID, CloudAccountID: env.CloudAccountID,
+		Name: "other", PulumiStack: "other-1", Region: env.Region,
+	})
+	if err != nil {
+		t.Fatalf("CreateEnvironment other: %v", err)
+	}
+	if _, err := s.GetLatestFailedJob(ctx, otherEnvID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("empty GetLatestFailedJob error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestGetLatestFailedJobDoesNotMaterializePayload(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+	jobID, err := s.CreateJob(ctx, Job{
+		EnvironmentID: envID,
+		Action:        ActionDestroy,
+		Status:        JobFailed,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	largeLogs := strings.Repeat("log-sentinel-", 1<<16)
+	if _, err := s.DB().ExecContext(ctx,
+		`UPDATE jobs SET logs = ?, summary_json = '{invalid-json' WHERE id = ?`,
+		largeLogs, jobID,
+	); err != nil {
+		t.Fatalf("seed large corrupt payload: %v", err)
+	}
+
+	got, err := s.GetLatestFailedJob(ctx, envID)
+	if err != nil {
+		t.Fatalf("GetLatestFailedJob: %v", err)
+	}
+	if got.ID != jobID || got.EnvironmentID != envID || got.Action != ActionDestroy || got.Status != JobFailed {
+		t.Fatalf("GetLatestFailedJob = %+v", got)
+	}
+	if got.Logs != "" || got.Summary != nil || got.StartedAt.Valid || got.FinishedAt.Valid {
+		t.Fatalf("GetLatestFailedJob materialized payload fields: %+v", got)
 	}
 }

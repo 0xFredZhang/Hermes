@@ -74,7 +74,9 @@ func main() {
 	broker := orchestrator.NewBroker()
 	prov := pulumiengine.New(cfg.PulumiProject, cfg.PulumiBackend, passphrase)
 	orch := orchestrator.New(st, prov, broker, cfg.Workers)
-	orch.Start(context.Background())
+	if err := orch.Start(context.Background()); err != nil {
+		log.Fatalf("start orchestrator: %v", err)
+	}
 
 	deps := api.Deps{
 		Store:        st,
@@ -116,8 +118,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
-	// Cancel workers: an in-flight provisioning job's context is cancelled, so it
-	// aborts and is reconciled to failed on the next startup (crash recovery).
+	// Cancel workers and wait until any interrupted job has persisted its failed
+	// terminal state. The DB is closed only after Stop returns.
 	// The DB is closed by the deferred st.Close() as main returns.
 	orch.Stop()
 }
