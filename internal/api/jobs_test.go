@@ -12,7 +12,7 @@ import (
 	"github.com/0xFredZhang/Hermes/internal/store"
 )
 
-func TestJobLogStreamReplaysTerminalLogsFromStore(t *testing.T) {
+func TestJobLogStreamReturnsPersistedTerminalLogs(t *testing.T) {
 	for _, status := range []string{store.JobSucceeded, store.JobFailed} {
 		t.Run(status, func(t *testing.T) {
 			d := testDepsWithOrchestrator(t)
@@ -44,7 +44,7 @@ func TestJobLogStreamReplaysTerminalLogsFromStore(t *testing.T) {
 	}
 }
 
-func TestJobLogStreamUnknownJobReturnsNotFoundWithoutTopic(t *testing.T) {
+func TestJobLogStreamRejectsUnknownJob(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	rec := serveJobStream(t, d, 99999)
 	if rec.Code != http.StatusNotFound {
@@ -52,6 +52,45 @@ func TestJobLogStreamUnknownJobReturnsNotFoundWithoutTopic(t *testing.T) {
 	}
 	if got := activeBrokerTopics(d.Broker); got != 0 {
 		t.Fatalf("unknown stream created %d broker topics", got)
+	}
+}
+
+func TestJobLogStreamUsesBrokerOnlyForActiveJob(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	jobID, err := d.Store.CreateJob(context.Background(), store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionPreview,
+		Status:        store.JobQueued,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if err := d.Store.SetJobLogs(context.Background(), jobID, "stale persisted active log"); err != nil {
+		t.Fatalf("SetJobLogs: %v", err)
+	}
+	writer := d.Broker.Writer(jobID)
+	if _, err := writer.Write([]byte("live broker log\n")); err != nil {
+		t.Fatalf("broker write: %v", err)
+	}
+	// A sealed topic gives this handler test a deterministic end-of-stream
+	// boundary without changing the Job's active database state.
+	d.Broker.Seal(jobID)
+
+	rec := serveJobStream(t, d, jobID)
+	body := rec.Body.String()
+	if !strings.Contains(body, "data: live broker log") || strings.Contains(body, "stale persisted active log") {
+		t.Fatalf("active stream did not use broker history exclusively: %q", body)
+	}
+	if !strings.Contains(body, "event: done") {
+		t.Fatalf("active sealed stream missing done event: %q", body)
+	}
+	if got := activeBrokerTopics(d.Broker); got != 1 {
+		t.Fatalf("active stream topic count = %d, want 1 until terminal persistence", got)
+	}
+	d.Broker.Close(jobID)
+	if got := activeBrokerTopics(d.Broker); got != 0 {
+		t.Fatalf("active stream cleanup retained %d topics", got)
 	}
 }
 

@@ -2,12 +2,16 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/0xFredZhang/Hermes/internal/orchestrator"
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
@@ -195,6 +199,237 @@ func TestDeployCreatesEnvironmentAndPreviewJob(t *testing.T) {
 	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envs[0].ID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionPreview || jobs[0].Status != store.JobQueued {
 		t.Fatalf("preview job not enqueued: %+v", jobs)
+	}
+}
+
+func TestDeployPreviewEnqueueFailureLeavesNoPendingEnvironment(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+	bpID, err := d.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: pid, CloudAccountID: aid, Name: "bp", Params: validBPParams(),
+	})
+	if err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+	if _, err := d.Store.DB().ExecContext(context.Background(), `
+		CREATE TRIGGER reject_preview_job
+		BEFORE INSERT ON jobs
+		BEGIN
+			SELECT RAISE(ABORT, 'sensitive forced enqueue failure');
+		END;
+	`); err != nil {
+		t.Fatalf("create enqueue failure trigger: %v", err)
+	}
+
+	rec := authedPost(t, d, "/blueprints/"+itoa(bpID)+"/deploy", url.Values{"env_name": {"prod"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect Location: %v", err)
+	}
+	if location.Path != "/blueprints" {
+		t.Fatalf("redirect path = %q, want /blueprints", location.Path)
+	}
+	if got := location.Query().Get("error"); got != "任务启动失败，请稍后重试" {
+		t.Fatalf("redirect error = %q, want safe retry guidance", got)
+	}
+	if strings.Contains(rec.Body.String(), "sensitive forced enqueue failure") || strings.Contains(rec.Header().Get("Location"), "sensitive") {
+		t.Fatalf("response leaked internal enqueue error: headers=%v body=%s", rec.Header(), rec.Body.String())
+	}
+	page := authedGet(t, d, rec.Header().Get("Location"))
+	if !strings.Contains(page.Body.String(), "任务启动失败，请稍后重试") {
+		t.Fatalf("redirected blueprint page did not show safe recovery message: %s", page.Body.String())
+	}
+	envs, err := d.Store.ListEnvironments(context.Background())
+	if err != nil {
+		t.Fatalf("ListEnvironments: %v", err)
+	}
+	if len(envs) != 0 {
+		t.Fatalf("failed initial preview left environments behind: %+v", envs)
+	}
+}
+
+func TestDeployPreviewCleanupFailureRedirectsToEnvironment(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+	bpID, err := d.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: pid, CloudAccountID: aid, Name: "bp", Params: validBPParams(),
+	})
+	if err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+	if _, err := d.Store.DB().ExecContext(context.Background(), `
+		CREATE TRIGGER reject_preview_job
+		BEFORE INSERT ON jobs
+		BEGIN
+			SELECT RAISE(ABORT, 'sensitive forced enqueue failure');
+		END;
+		CREATE TRIGGER reject_environment_cleanup
+		BEFORE DELETE ON environments
+		BEGIN
+			SELECT RAISE(ABORT, 'sensitive forced cleanup failure');
+		END;
+	`); err != nil {
+		t.Fatalf("create failure triggers: %v", err)
+	}
+
+	rec := authedPost(t, d, "/blueprints/"+itoa(bpID)+"/deploy", url.Values{"env_name": {"prod"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	envs, err := d.Store.ListEnvironments(context.Background())
+	if err != nil {
+		t.Fatalf("ListEnvironments: %v", err)
+	}
+	if len(envs) != 1 || envs[0].Status != store.EnvPending {
+		t.Fatalf("cleanup failure environment = %+v, want one visible pending environment", envs)
+	}
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect Location: %v", err)
+	}
+	if want := "/environments/" + itoa(envs[0].ID); location.Path != want {
+		t.Fatalf("redirect path = %q, want %q", location.Path, want)
+	}
+	wantMessage := "任务启动失败，环境未能自动清理，请在此处继续处理"
+	if got := location.Query().Get("error"); got != wantMessage {
+		t.Fatalf("redirect error = %q, want %q", got, wantMessage)
+	}
+	response := rec.Header().Get("Location") + rec.Body.String()
+	if strings.Contains(response, "sensitive forced enqueue failure") || strings.Contains(response, "sensitive forced cleanup failure") {
+		t.Fatalf("response leaked internal failure: headers=%v body=%s", rec.Header(), rec.Body.String())
+	}
+	page := authedGet(t, d, rec.Header().Get("Location")).Body.String()
+	if !strings.Contains(page, wantMessage) || !strings.Contains(page, `/environments/`+itoa(envs[0].ID)+`/preview`) {
+		t.Fatalf("retained environment page lacks recovery guidance/action: %s", page)
+	}
+}
+
+func TestDeployPreviewStaleCleanupRedirectsToEnvironment(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+	bpID, err := d.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: pid, CloudAccountID: aid, Name: "bp", Params: validBPParams(),
+	})
+	if err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+	if _, err := d.Store.DB().ExecContext(context.Background(), `
+		CREATE TRIGGER reject_preview_job
+		BEFORE INSERT ON jobs
+		BEGIN
+			SELECT RAISE(ABORT, 'sensitive forced enqueue failure');
+		END;
+		CREATE TRIGGER ignore_environment_cleanup
+		BEFORE DELETE ON environments
+		BEGIN
+			SELECT RAISE(IGNORE);
+		END;
+	`); err != nil {
+		t.Fatalf("create stale cleanup triggers: %v", err)
+	}
+
+	rec := authedPost(t, d, "/blueprints/"+itoa(bpID)+"/deploy", url.Values{"env_name": {"prod"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	envs, err := d.Store.ListEnvironments(context.Background())
+	if err != nil {
+		t.Fatalf("ListEnvironments: %v", err)
+	}
+	if len(envs) != 1 {
+		t.Fatalf("stale cleanup environments = %+v, want retained environment", envs)
+	}
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect Location: %v", err)
+	}
+	if want := "/environments/" + itoa(envs[0].ID); location.Path != want {
+		t.Fatalf("redirect path = %q, want %q", location.Path, want)
+	}
+	if got, want := location.Query().Get("error"), "环境状态已变化，请在详情中确认后续操作"; got != want {
+		t.Fatalf("redirect error = %q, want %q", got, want)
+	}
+}
+
+func TestDeployPreviewCanceledEnqueueLeavesNoPendingEnvironment(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+	bpID, err := d.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: pid, CloudAccountID: aid, Name: "bp", Params: validBPParams(),
+	})
+	if err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+
+	// An unstarted orchestrator has 128 admission slots. Filling them makes the
+	// deploy request block after its Environment insert and before its Job insert.
+	for i := 0; i < 128; i++ {
+		envID, err := d.Store.CreateEnvironment(context.Background(), store.Environment{
+			BlueprintID: bpID, CloudAccountID: aid,
+			Name: "queued-" + strconv.Itoa(i), PulumiStack: "queued-" + strconv.Itoa(i),
+			Region: "ap-southeast-1", Snapshot: validBPParams(),
+		})
+		if err != nil {
+			t.Fatalf("CreateEnvironment %d: %v", i, err)
+		}
+		if _, err := d.Orchestrator.Enqueue(context.Background(), envID, store.ActionPreview); err != nil {
+			t.Fatalf("fill orchestrator queue %d: %v", i, err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	form := url.Values{"env_name": {"cancelled-deploy"}}
+	req := httptest.NewRequest(http.MethodPost, "/blueprints/"+itoa(bpID)+"/deploy", strings.NewReader(form.Encode())).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(d.Auth.IssueCookie())
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		NewRouter(d).ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	var createdID int64
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for createdID == 0 {
+		envs, listErr := d.Store.ListEnvironments(context.Background())
+		if listErr != nil {
+			t.Fatalf("ListEnvironments: %v", listErr)
+		}
+		for _, env := range envs {
+			if env.Name == "cancelled-deploy" {
+				createdID = env.ID
+				break
+			}
+		}
+		if createdID != 0 {
+			break
+		}
+		select {
+		case <-deadline.C:
+			t.Fatal("deploy did not reach enqueue after creating its environment")
+		case <-ticker.C:
+		}
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canceled deploy handler did not return")
+	}
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	if _, err := d.Store.GetEnvironment(context.Background(), createdID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("canceled enqueue left pending environment %d: %v", createdID, err)
 	}
 }
 

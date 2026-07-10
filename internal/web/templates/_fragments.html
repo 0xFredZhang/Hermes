@@ -29,11 +29,16 @@
 {{define "env_status"}}
 <div id="status" hx-get="/environments/{{.Env.ID}}/status" hx-trigger="every 2s" hx-swap="outerHTML">
   <p class="status-line">状态:<strong class="status-value">{{.Env.Status}}</strong></p>
-  {{if eq .Env.Status "preview_ready"}}
+  {{if eq .Env.Status "pending"}}
+    <p class="notice err">初始预演尚未启动</p>
+    <div class="action-group">
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/preview"><button class="button-primary">重试预演</button></form>
+    </div>
+  {{else if eq .Env.Status "preview_ready"}}
     <p class="notice ok">预演:{{.Plan}}</p>
     <div class="action-group">
       <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/up"><button class="button-primary">确认创建</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
     </div>
   {{else if eq .Env.Status "up"}}
     <p class="notice ok">已就绪</p>
@@ -95,7 +100,7 @@
     <p class="notice err">失败</p>
     <div class="action-group">
       <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/retry"><button class="button-primary">重试</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
     </div>
   {{else if eq .Env.Status "destroyed"}}
     <p class="status-line">已销毁</p>

@@ -1,9 +1,14 @@
 package api
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -13,7 +18,7 @@ import (
 
 func addBlueprintRoutes(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("GET /blueprints", func(w http.ResponseWriter, r *http.Request) {
-		renderBlueprints(w, r, d, "")
+		renderBlueprints(w, r, d, r.URL.Query().Get("error"))
 	})
 	mux.HandleFunc("POST /blueprints", func(w http.ResponseWriter, r *http.Request) {
 		handleCreateBlueprint(w, r, d)
@@ -124,10 +129,37 @@ func handleDeploy(w http.ResponseWriter, r *http.Request, d Deps) {
 		return
 	}
 	if _, err := d.Orchestrator.Enqueue(r.Context(), envID, store.ActionPreview); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		redirectAfterInitialPreviewFailure(w, r, d, envID, err)
 		return
 	}
 	http.Redirect(w, r, "/environments/"+strconv.FormatInt(envID, 10), http.StatusSeeOther)
+}
+
+func redirectAfterInitialPreviewFailure(w http.ResponseWriter, r *http.Request, d Deps, envID int64, enqueueErr error) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+	cleanupErr := d.Store.DeletePendingEnvironment(cleanupCtx, envID)
+	if cleanupErr == nil {
+		cancel()
+		redirectLifecycleResult(w, r, "/blueprints", enqueueErr)
+		return
+	}
+
+	log.Printf("delete environment %d after preview enqueue failure: %v", envID, cleanupErr)
+	_, lookupErr := d.Store.GetEnvironment(cleanupCtx, envID)
+	cancel()
+	if errors.Is(lookupErr, sql.ErrNoRows) {
+		redirectLifecycleResult(w, r, "/blueprints", enqueueErr)
+		return
+	}
+	if lookupErr != nil {
+		log.Printf("verify environment %d after cleanup failure: %v", envID, lookupErr)
+	}
+
+	message := "任务启动失败，环境未能自动清理，请在此处继续处理"
+	if errors.Is(cleanupErr, store.ErrStaleTransition) {
+		message = "环境状态已变化，请在详情中确认后续操作"
+	}
+	redirectErrorMessage(w, r, environmentPath(envID), message)
 }
 
 // slug reduces a name to lowercase alphanumerics and hyphens for a stack name.

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
@@ -55,6 +56,28 @@ func (s *Store) CreateEnvironment(ctx context.Context, e Environment) (int64, er
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// DeletePendingEnvironment compensates for a failed initial enqueue. The
+// conditional delete cannot remove an environment after lifecycle work starts.
+func (s *Store) DeletePendingEnvironment(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM environments
+		 WHERE id = ? AND status = ?
+		   AND NOT EXISTS (
+		       SELECT 1 FROM jobs WHERE environment_id = environments.id
+		   )`,
+		id, EnvPending,
+	)
+	if err != nil {
+		return fmt.Errorf("delete pending environment: %w", err)
+	}
+	if ok, err := changedExactlyOne(res); err != nil {
+		return fmt.Errorf("delete pending environment: %w", err)
+	} else if !ok {
+		return fmt.Errorf("%w: environment %d is no longer an unused pending environment", ErrStaleTransition, id)
+	}
+	return nil
 }
 
 func (s *Store) GetEnvironment(ctx context.Context, id int64) (Environment, error) {

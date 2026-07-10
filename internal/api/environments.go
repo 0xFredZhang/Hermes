@@ -2,11 +2,15 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/0xFredZhang/Hermes/internal/orchestrator"
 	"github.com/0xFredZhang/Hermes/internal/store"
 )
 
@@ -27,7 +31,9 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 			return
 		}
 		jobs, _ := d.Store.ListJobsByEnvironment(r.Context(), id)
-		d.Renderer.Render(w, "environment_detail", envViewData(r.Context(), d, env, jobs))
+		data := envViewData(r.Context(), d, env, jobs)
+		data["Error"] = r.URL.Query().Get("error")
+		d.Renderer.Render(w, "environment_detail", data)
 	})
 	mux.HandleFunc("GET /environments/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -40,6 +46,7 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = d.Renderer.RenderPartial(w, "env_status", envViewData(r.Context(), d, env, jobs))
 	})
+	mux.HandleFunc("POST /environments/{id}/preview", enqueueHandler(d, store.ActionPreview))
 	mux.HandleFunc("POST /environments/{id}/up", enqueueHandler(d, store.ActionUp))
 	mux.HandleFunc("POST /environments/{id}/retry", retryHandler(d))
 	mux.HandleFunc("POST /environments/{id}/refresh", enqueueHandler(d, store.ActionRefresh))
@@ -55,41 +62,66 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 func retryHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		_, _ = d.Orchestrator.Retry(r.Context(), id)
-		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		_, err := d.Orchestrator.Retry(r.Context(), id)
+		redirectLifecycleResult(w, r, environmentPath(id), err)
 	}
 }
 
 func enqueueHandler(d Deps, action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		// Enqueue guards one-active-job-per-env; on busy/error we still redirect
-		// and the status fragment reflects the true state.
-		_, _ = d.Orchestrator.Enqueue(r.Context(), id, action)
-		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		_, err := d.Orchestrator.Enqueue(r.Context(), id, action)
+		redirectLifecycleResult(w, r, environmentPath(id), err)
 	}
 }
 
 func destroyHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		env, err := d.Store.GetEnvironment(r.Context(), id)
-		if err == nil && env.Status == store.EnvUp {
-			http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
-			return
-		}
-		_, _ = d.Orchestrator.Enqueue(r.Context(), id, store.ActionDestroy)
-		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		_, err := d.Orchestrator.Enqueue(r.Context(), id, store.ActionDestroy)
+		redirectLifecycleResult(w, r, environmentPath(id), err)
 	}
 }
 
 func cancelDestroyHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if env, err := d.Store.GetEnvironment(r.Context(), id); err == nil && env.Status == store.EnvDestroyPreviewReady {
-			_ = d.Store.UpdateEnvironmentStatus(r.Context(), id, store.EnvUp)
-		}
-		http.Redirect(w, r, "/environments/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		err := d.Orchestrator.CancelDestroyPreview(r.Context(), id)
+		redirectLifecycleResult(w, r, environmentPath(id), err)
+	}
+}
+
+func environmentPath(id int64) string {
+	return "/environments/" + strconv.FormatInt(id, 10)
+}
+
+func redirectLifecycleResult(w http.ResponseWriter, r *http.Request, target string, err error) {
+	if err != nil {
+		redirectErrorMessage(w, r, target, lifecycleErrorMessage(err))
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+func redirectErrorMessage(w http.ResponseWriter, r *http.Request, target, message string) {
+	query := url.Values{"error": {message}}
+	http.Redirect(w, r, target+"?"+query.Encode(), http.StatusSeeOther)
+}
+
+func lifecycleErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, orchestrator.ErrEnvironmentBusy), errors.Is(err, store.ErrActiveJob):
+		return "环境正在执行其他任务，请稍后再试"
+	case errors.Is(err, orchestrator.ErrNoFailedJob):
+		return "没有可重试的失败任务"
+	case errors.Is(err, orchestrator.ErrInvalidAction), errors.Is(err, store.ErrInvalidAction):
+		return "不支持该操作，请刷新后重试"
+	case errors.Is(err, orchestrator.ErrInvalidTransition), errors.Is(err, store.ErrStaleTransition), errors.Is(err, sql.ErrNoRows):
+		return "当前环境状态不允许此操作，请刷新后重试"
+	case errors.Is(err, orchestrator.ErrOrchestratorDegraded):
+		return "任务服务暂不可用，请稍后重试"
+	default:
+		return "任务启动失败，请稍后重试"
 	}
 }
 
@@ -142,13 +174,14 @@ func revealRedisCredentialsHandler(d Deps) http.HandlerFunc {
 }
 
 // envViewData is the template payload shared by the detail page and the status
-// fragment: the environment, the latest job id/logs (for the SSE pane), a
+// fragment: the environment, active stream or terminal logs, a
 // preview plan string, and a formatted public-IP list.
 func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []store.Job) map[string]any {
 	// Initialize every key the templates reference so missing values render as
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
-		"Env": env, "CurrentJobID": int64(0), "CurrentLogs": "", "Plan": "",
+		"Env": env, "CurrentJobActive": false,
+		"CurrentJobStreamURL": "", "CurrentLogs": "", "Plan": "",
 		"DestroyPlan": "",
 		"RefreshPlan": "",
 		"PublicIPs":   "", "PublicDNS": "",
@@ -159,8 +192,13 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 		"HasRedisSecret": false,
 	}
 	if len(jobs) > 0 {
-		data["CurrentJobID"] = jobs[0].ID // DESC order → newest first
-		data["CurrentLogs"] = jobs[0].Logs
+		switch jobs[0].Status {
+		case store.JobQueued, store.JobRunning:
+			data["CurrentJobActive"] = true
+			data["CurrentJobStreamURL"] = "/jobs/" + strconv.FormatInt(jobs[0].ID, 10) + "/logs/stream"
+		case store.JobSucceeded, store.JobFailed:
+			data["CurrentLogs"] = jobs[0].Logs
+		}
 	}
 	for _, j := range jobs {
 		if j.Action == store.ActionPreview && j.Summary != nil {
