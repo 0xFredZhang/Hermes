@@ -2,10 +2,21 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0xFredZhang/Hermes/internal/provisioner"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+)
+
+var (
+	ErrBlueprintReferenced       = errors.New("blueprint is referenced by an environment")
+	ErrBlueprintOwnershipInvalid = errors.New("blueprint project or cloud account does not exist")
 )
 
 type Blueprint struct {
@@ -15,6 +26,33 @@ type Blueprint struct {
 	Name           string
 	Params         provisioner.BlueprintParams
 	CreatedAt      time.Time
+}
+
+func (s *Store) UpdateBlueprint(ctx context.Context, b Blueprint) error {
+	b.Params.ApplyDefaults()
+	raw, err := json.Marshal(b.Params)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE blueprints
+		 SET project_id = ?, name = ?, cloud_account_id = ?, params_json = ?
+		 WHERE id = ?`,
+		b.ProjectID, b.Name, b.CloudAccountID, string(raw), b.ID)
+	if err != nil {
+		if isSQLiteForeignKeyConstraint(err) {
+			return ErrBlueprintOwnershipInvalid
+		}
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *Store) CreateBlueprint(ctx context.Context, b Blueprint) (int64, error) {
@@ -28,6 +66,9 @@ func (s *Store) CreateBlueprint(ctx context.Context, b Blueprint) (int64, error)
 		 VALUES (?, ?, ?, ?)`,
 		b.ProjectID, b.Name, b.CloudAccountID, string(raw))
 	if err != nil {
+		if isSQLiteForeignKeyConstraint(err) {
+			return 0, ErrBlueprintOwnershipInvalid
+		}
 		return 0, err
 	}
 	return res.LastInsertId()
@@ -75,6 +116,25 @@ func (s *Store) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
 }
 
 func (s *Store) DeleteBlueprint(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM blueprints WHERE id = ?`, id)
-	return err
+	res, err := s.db.ExecContext(ctx, `DELETE FROM blueprints WHERE id = ?`, id)
+	if err != nil {
+		if isSQLiteForeignKeyConstraint(err) {
+			return fmt.Errorf("%w: %v", ErrBlueprintReferenced, err)
+		}
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func isSQLiteForeignKeyConstraint(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && (sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY ||
+		sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_TRIGGER && strings.Contains(sqliteErr.Error(), "FOREIGN KEY constraint failed"))
 }

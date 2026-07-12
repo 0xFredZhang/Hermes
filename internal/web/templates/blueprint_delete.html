@@ -1,0 +1,17 @@
+{{define "content"}}
+<section class="page-panel">
+  <a class="back-link" href="/blueprints">返回蓝图</a>
+  <div class="page-header"><div><h2 class="page-title">删除蓝图</h2><p class="page-description">请在继续前确认目标与影响。</p></div></div>
+  <div class="notice err" role="alert">
+    <p>即将永久删除蓝图“{{.Blueprint.Name}}”。已有环境引用时，Hermes 会拒绝删除。</p>
+  </div>
+  <dl class="summary-grid">
+    <div><dt>名称</dt><dd>{{.Blueprint.Name}}</dd></div>
+    <div><dt>Region</dt><dd>{{.Blueprint.Params.Region}}</dd></div>
+    <div><dt>EC2</dt><dd>{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div>
+  </dl>
+  <form method="post" action="/blueprints/{{.Blueprint.ID}}/delete">
+    <div class="form-actions"><button class="button-danger" type="submit">确认删除</button><a class="button" href="/blueprints">取消</a></div>
+  </form>
+</section>
+{{end}}

@@ -170,6 +170,10 @@
     @apply max-w-2xl;
   }
 
+  .blueprint-form-page {
+    @apply max-w-5xl;
+  }
+
   .field-block {
     @apply mb-5;
   }
@@ -199,7 +203,7 @@
   }
 
   .field-group {
-    @apply rounded-lg border border-console-border bg-console-surface p-4;
+    @apply rounded-md border border-console-border bg-console-surface p-4;
   }
 
   .field-group + .field-group {
@@ -256,7 +260,7 @@
   }
 
   .button-primary {
-    @apply border-console-primary bg-console-primary text-white;
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-primary bg-console-primary px-3 py-2 text-sm font-medium text-white transition-colors;
   }
 
   .button-primary:hover {
@@ -289,7 +293,15 @@
   }
 
   .form-actions {
-    @apply flex flex-wrap items-center gap-3 pt-1;
+    @apply mt-5 flex flex-wrap items-center gap-3 pt-1;
+  }
+
+  .disclosure-toggle {
+    @apply min-h-11 border-transparent bg-transparent px-0 text-console-ink;
+  }
+
+  .disclosure-toggle:hover {
+    @apply border-transparent bg-transparent text-console-primary-strong;
   }
 
   .password-control {
@@ -345,7 +357,23 @@
   }
 
   .table-wrap {
-    @apply mt-4 overflow-x-auto rounded-lg border border-console-border;
+    @apply mt-4 overflow-x-auto rounded-md border border-console-border;
+  }
+
+  .summary-grid {
+    @apply grid gap-x-8 gap-y-4 border-y border-console-border py-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .summary-grid div {
+    @apply min-w-0;
+  }
+
+  .summary-grid dt {
+    @apply text-sm font-medium text-console-muted;
+  }
+
+  .summary-grid dd {
+    @apply mt-1 break-words text-sm text-console-ink;
   }
 
   .long-value {

@@ -12,17 +12,18 @@
 {{define "blueprint_rows"}}
 {{range .}}
 <tr>
-  <td>{{.Name}}</td><td>{{.Params.Region}}</td><td>{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
+  <td><a href="/blueprints/{{.ID}}">{{.Name}}</a></td><td>{{.Params.Region}}</td><td>{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
   <td>
-    <form class="inline-form" method="post" action="/blueprints/{{.ID}}/deploy">
-      <input class="input-control" name="env_name" placeholder="环境名" required>
-      <button class="button-primary" type="submit">部署</button>
-    </form>
-    <button class="button-danger" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除该蓝图?">删除</button>
+    <div class="action-group">
+      <a class="button" href="/blueprints/{{.ID}}/edit">编辑</a>
+      <a class="button" href="/blueprints/{{.ID}}/duplicate">复制</a>
+      <a class="button-primary" href="/blueprints/{{.ID}}/deploy">部署</a>
+      <a class="button button-danger" href="/blueprints/{{.ID}}/delete" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除蓝图“{{.Name}}”？">删除</a>
+    </div>
   </td>
 </tr>
 {{else}}
-<tr><td colspan="4" class="empty-row">暂无蓝图，填写上方表单保存一个可部署规格。</td></tr>
+<tr><td colspan="4" class="empty-row">暂无蓝图。<a href="/blueprints/new">新建蓝图</a>后即可部署。</td></tr>
 {{end}}
 {{end}}
 

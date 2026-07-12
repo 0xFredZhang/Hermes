@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -12,10 +13,25 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRenderer: %v", err)
 	}
-	for _, name := range []string{"login", "accounts", "account_form", "projects", "project_form", "blueprints", "environments", "environment_detail"} {
+	for _, name := range []string{"login", "accounts", "account_form", "projects", "project_form", "blueprints", "blueprint_form", "blueprint_detail", "blueprint_deploy", "blueprint_delete", "environments", "environment_detail"} {
 		if r.pages[name] == nil {
 			t.Fatalf("page %q not parsed", name)
 		}
+	}
+}
+
+func TestRendererDoesNotWritePartialSuccessOnTemplateError(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	w := httptest.NewRecorder()
+	r.Render(w, "blueprint_form", map[string]any{"PageTitle": "broken"})
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "<!doctype html>") {
+		t.Fatalf("renderer wrote partial success before error: %s", w.Body.String())
 	}
 }
 
@@ -28,6 +44,7 @@ func TestStaticAppCSSIsEmbedded(t *testing.T) {
 		"tailwindcss", ".app-shell", ".skip-link", ".form-surface", ".password-control",
 		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`,
 		`@media (max-width:39.999rem){.responsive-table-wrap{border:0`,
+		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
@@ -40,9 +57,18 @@ func TestStaticAppJSIsEmbeddedWithProgressiveEnhancements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("static app script must be embedded: %v", err)
 	}
-	for _, want := range []string{"data-password-toggle", "htmx:confirm", "showModal", "aria-pressed"} {
+	for _, want := range []string{"data-password-toggle", "htmx:confirm", "showModal", "aria-pressed", "data-disclosure", "aria-expanded", "data-redis-enabled", "data-redis-auth", "HermesBlueprintMetadata"} {
 		if !strings.Contains(string(js), want) {
 			t.Fatalf("static app script missing %q", want)
+		}
+	}
+	helper, err := StaticFS.ReadFile("static/blueprint_metadata.js")
+	if err != nil {
+		t.Fatalf("metadata helper must be embedded: %v", err)
+	}
+	for _, want := range []string{"applySelectionChange", "syncHint", "syncRedisAuth", "disabled"} {
+		if !strings.Contains(string(helper), want) {
+			t.Fatalf("metadata helper missing %q", want)
 		}
 	}
 }

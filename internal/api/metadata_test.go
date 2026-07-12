@@ -91,7 +91,7 @@ func TestRegionsEndpointRendersReadableRegionLabels(t *testing.T) {
 
 	rec := authedGet(t, d, "/blueprints/regions?cloud_account_id="+itoa(aid))
 	body := rec.Body.String()
-	if !strings.Contains(body, `<option value="ap-east-1">亚太地区（香港） · ap-east-1</option>`) {
+	if !strings.Contains(body, `<option value="ap-east-1" selected>亚太地区（香港） · ap-east-1</option>`) {
 		t.Fatalf("missing readable region label: %s", body)
 	}
 }
@@ -257,5 +257,67 @@ func TestRefreshCatalogCacheWarmsDefaultBlueprintMetadata(t *testing.T) {
 		if _, err := d.Store.GetCatalogCache(context.Background(), aid, tc.kind, tc.region, tc.lookupKey); err != nil {
 			t.Fatalf("missing warmed cache %s/%s/%s: %v", tc.kind, tc.region, tc.lookupKey, err)
 		}
+	}
+}
+
+func TestMetadataOptionsPreserveSelectedLegacyValues(t *testing.T) {
+	d := testDeps(t)
+	_, aid := seedProjectAccount(t, d)
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheRegions, "", "", []string{"ap-southeast-1"})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheInstanceTypes, "legacy-region-1", "", []cloud.InstanceType{{Name: "t3.micro", VCPUs: 2, MemoryMiB: 1024}})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheArchitecture, "legacy-region-1", "legacy.large", "x86_64")
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheImages, "legacy-region-1", "x86_64", []cloud.Image{{ID: "ami-current", Name: "Current"}})
+
+	regions := authedGet(t, d, "/blueprints/regions?cloud_account_id="+itoa(aid)+"&selected_region=legacy-region-1").Body.String()
+	if !strings.Contains(regions, `<option value="legacy-region-1" selected>`) {
+		t.Fatalf("legacy region was not preserved: %s", regions)
+	}
+	types := authedGet(t, d, "/blueprints/instance-types?cloud_account_id="+itoa(aid)+"&region=legacy-region-1&selected_instance_type=legacy.large").Body.String()
+	if !strings.Contains(types, `<option value="legacy.large" selected>legacy.large</option>`) {
+		t.Fatalf("legacy instance type was not preserved: %s", types)
+	}
+	amis := authedGet(t, d, "/blueprints/amis?cloud_account_id="+itoa(aid)+"&region=legacy-region-1&instance_type=legacy.large&selected_ami=ami-legacy").Body.String()
+	if !strings.Contains(amis, `<option value="ami-legacy" selected>ami-legacy</option>`) {
+		t.Fatalf("legacy AMI was not preserved: %s", amis)
+	}
+}
+
+func TestMetadataOptionsDoNotForceLegacyValuesAfterHintsReset(t *testing.T) {
+	d := testDeps(t)
+	_, aid := seedProjectAccount(t, d)
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheRegions, "", "", []string{"eu-west-1"})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheInstanceTypes, "eu-west-1", "", []cloud.InstanceType{{Name: "m7g.large"}})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheArchitecture, "eu-west-1", "m7g.large", "arm64")
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheImages, "eu-west-1", "arm64", []cloud.Image{{ID: "ami-arm", Name: "ARM image", Default: true}})
+
+	regions := authedGet(t, d, "/blueprints/regions?cloud_account_id="+itoa(aid)+"&selected_region=").Body.String()
+	if strings.Contains(regions, "legacy-region") || strings.Contains(regions, `value="ap-southeast-1"`) || !strings.Contains(regions, `<option value="eu-west-1" selected>`) {
+		t.Fatalf("reset region options = %s", regions)
+	}
+	types := authedGet(t, d, "/blueprints/instance-types?cloud_account_id="+itoa(aid)+"&region=eu-west-1&selected_instance_type=").Body.String()
+	if strings.Contains(types, "legacy.large") || strings.Contains(types, `value="t3.micro"`) || !strings.Contains(types, `<option value="m7g.large" selected>`) {
+		t.Fatalf("reset instance options = %s", types)
+	}
+	amis := authedGet(t, d, "/blueprints/amis?cloud_account_id="+itoa(aid)+"&region=eu-west-1&instance_type=m7g.large&selected_ami=").Body.String()
+	if strings.Contains(amis, "ami-legacy") || !strings.Contains(amis, `value="ami-arm"`) {
+		t.Fatalf("reset AMI options = %s", amis)
+	}
+}
+
+func TestARMOnlyCatalogCascadeUsesCatalogInstanceAndAMI(t *testing.T) {
+	d := testDeps(t)
+	_, aid := seedProjectAccount(t, d)
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheRegions, "", "", []string{"eu-west-1"})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheInstanceTypes, "eu-west-1", "", []cloud.InstanceType{{Name: "m7g.large"}})
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheArchitecture, "eu-west-1", "m7g.large", "arm64")
+	seedCatalogCacheJSON(t, d, aid, store.CatalogCacheImages, "eu-west-1", "arm64", []cloud.Image{{ID: "ami-arm", Name: "ARM image", Default: true}})
+
+	types := authedGet(t, d, "/blueprints/instance-types?cloud_account_id="+itoa(aid)+"&region=eu-west-1&selected_instance_type=").Body.String()
+	if strings.Contains(types, `value="t3.micro"`) || !strings.Contains(types, `<option value="m7g.large" selected>`) {
+		t.Fatalf("ARM-only instance cascade selected an unavailable default: %s", types)
+	}
+	amIs := authedGet(t, d, "/blueprints/amis?cloud_account_id="+itoa(aid)+"&region=eu-west-1&instance_type=m7g.large&selected_ami=").Body.String()
+	if !strings.Contains(amIs, `<option value="ami-arm" selected>ARM image</option>`) {
+		t.Fatalf("ARM-only cascade did not resolve the catalog AMI: %s", amIs)
 	}
 }

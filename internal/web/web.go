@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"html/template"
 	"io"
@@ -33,6 +34,10 @@ func NewRenderer() (*Renderer, error) {
 		"projects":           "templates/projects.html",
 		"project_form":       "templates/project_form.html",
 		"blueprints":         "templates/blueprints.html",
+		"blueprint_form":     "templates/blueprint_form.html",
+		"blueprint_detail":   "templates/blueprint_detail.html",
+		"blueprint_deploy":   "templates/blueprint_deploy.html",
+		"blueprint_delete":   "templates/blueprint_delete.html",
 		"environments":       "templates/environments.html",
 		"environment_detail": "templates/environment_detail.html",
 	}
@@ -55,10 +60,18 @@ func NewRenderer() (*Renderer, error) {
 }
 
 func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := r.pages[name].ExecuteTemplate(w, "layout", data); err != nil {
+	r.RenderStatus(w, name, http.StatusOK, data)
+}
+
+func (r *Renderer) RenderStatus(w http.ResponseWriter, name string, status int, data any) {
+	var body bytes.Buffer
+	if err := r.pages[name].ExecuteTemplate(&body, "layout", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(body.Bytes())
 }
 
 // RenderPartial writes a single named fragment (for htmx swaps).

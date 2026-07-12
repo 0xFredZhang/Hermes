@@ -62,7 +62,22 @@ func handleRegions(w http.ResponseWriter, r *http.Request, d Deps) {
 	} else if !fresh {
 		refreshCatalogCacheAsync(d, acc)
 	}
-	writeRegionOptions(w, regions, defaultRegion(acc), "")
+	selected := strings.TrimSpace(r.URL.Query().Get("selected_region"))
+	if selected != "" && !contains(regions, selected) {
+		regions = append(regions, selected)
+	} else if selected == "" {
+		configuredDefault := defaultRegion(acc)
+		switch {
+		case contains(regions, configuredDefault):
+			selected = configuredDefault
+		case len(regions) > 0:
+			selected = regions[0]
+		default:
+			selected = configuredDefault
+			regions = []string{configuredDefault}
+		}
+	}
+	writeRegionOptions(w, regions, selected, "")
 }
 
 func handleInstanceTypes(w http.ResponseWriter, r *http.Request, d Deps) {
@@ -75,16 +90,35 @@ func handleInstanceTypes(w http.ResponseWriter, r *http.Request, d Deps) {
 		writeOptions(w, nil, "请先选择 Region")
 		return
 	}
+	hint := strings.TrimSpace(r.URL.Query().Get("selected_instance_type"))
 	itypes, fresh, err := readCachedCatalogValue[[]cloud.InstanceType](r.Context(), d.Store, acc.ID, store.CatalogCacheInstanceTypes, region, "")
 	if err != nil {
 		refreshRegionCacheAsync(d, acc, region)
-		writeInstanceTypeOptions(w, []cloud.InstanceType{defaultInstanceTypeDetails()}, defaultInstanceType, "实例规格缓存正在更新，暂用默认规格")
+		values, selected := instanceTypeOptions([]cloud.InstanceType{defaultInstanceTypeDetails()}, hint)
+		writeInstanceTypeOptions(w, values, selected, "实例规格缓存正在更新，暂用默认规格")
 		return
 	}
 	if !fresh {
 		refreshRegionCacheAsync(d, acc, region)
 	}
-	writeInstanceTypeOptions(w, itypes, defaultInstanceType, "")
+	itypes, selected := instanceTypeOptions(itypes, hint)
+	writeInstanceTypeOptions(w, itypes, selected, "")
+}
+
+func instanceTypeOptions(values []cloud.InstanceType, legacyHint string) ([]cloud.InstanceType, string) {
+	if len(values) == 0 {
+		values = []cloud.InstanceType{defaultInstanceTypeDetails()}
+	}
+	if legacyHint != "" {
+		if !containsInstanceType(values, legacyHint) {
+			values = append(values, cloud.InstanceType{Name: legacyHint})
+		}
+		return values, legacyHint
+	}
+	if containsInstanceType(values, defaultInstanceType) {
+		return values, defaultInstanceType
+	}
+	return values, values[0].Name
 }
 
 func handleAMIs(w http.ResponseWriter, r *http.Request, d Deps) {
@@ -95,25 +129,25 @@ func handleAMIs(w http.ResponseWriter, r *http.Request, d Deps) {
 	q := r.URL.Query()
 	region, itype := q.Get("region"), q.Get("instance_type")
 	if region == "" || itype == "" {
-		writeAMIOptions(w, nil)
+		writeAMIOptions(w, nil, q.Get("selected_ami"))
 		return
 	}
 	arch, freshArch, err := readCachedCatalogValue[string](r.Context(), d.Store, acc.ID, store.CatalogCacheArchitecture, region, itype)
 	if err != nil {
 		refreshAMIDataAsync(d, acc, region, itype)
-		writeAMIOptions(w, nil)
+		writeAMIOptions(w, nil, q.Get("selected_ami"))
 		return
 	}
 	imgs, freshImages, err := readCachedCatalogValue[[]cloud.Image](r.Context(), d.Store, acc.ID, store.CatalogCacheImages, region, arch)
 	if err != nil {
 		refreshAMIDataAsync(d, acc, region, itype)
-		writeAMIOptions(w, nil)
+		writeAMIOptions(w, nil, q.Get("selected_ami"))
 		return
 	}
 	if !freshArch || !freshImages {
 		refreshAMIDataAsync(d, acc, region, itype)
 	}
-	writeAMIOptions(w, imgs)
+	writeAMIOptions(w, imgs, q.Get("selected_ami"))
 }
 
 func readCachedCatalogValue[T any](
@@ -290,6 +324,15 @@ func contains(values []string, want string) bool {
 	return false
 }
 
+func containsInstanceType(values []cloud.InstanceType, want string) bool {
+	for _, value := range values {
+		if value.Name == want {
+			return true
+		}
+	}
+	return false
+}
+
 // writeOptions renders <option> elements for a datalist. A non-empty note is
 // rendered first so the user sees why the list is empty.
 func writeOptions(w http.ResponseWriter, values []string, note string) {
@@ -407,16 +450,23 @@ var regionNamesZH = map[string]string{
 // writeAMIOptions renders <option> elements for the AMI <select>. The first
 // option is always the auto/fallback (empty value → the program auto-resolves
 // Ubuntu 26.04). The catalog's default image is pre-selected.
-func writeAMIOptions(w http.ResponseWriter, imgs []cloud.Image) {
+func writeAMIOptions(w http.ResponseWriter, imgs []cloud.Image, selected string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var b strings.Builder
 	b.WriteString(`<option value="">自动:最新 Ubuntu 26.04 LTS</option>`)
+	found := false
 	for _, im := range imgs {
 		sel := ""
-		if im.Default {
+		if im.ID == selected || (selected == "" && im.Default) {
 			sel = " selected"
 		}
+		if im.ID == selected {
+			found = true
+		}
 		b.WriteString(`<option value="` + html.EscapeString(im.ID) + `"` + sel + `>` + html.EscapeString(im.Name) + `</option>`)
+	}
+	if selected != "" && !found {
+		b.WriteString(`<option value="` + html.EscapeString(selected) + `" selected>` + html.EscapeString(selected) + `</option>`)
 	}
 	_, _ = w.Write([]byte(b.String()))
 }

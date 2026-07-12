@@ -1,0 +1,12 @@
+{{define "content"}}
+<section class="page-panel form-page">
+  <a class="back-link" href="/blueprints/{{.Blueprint.ID}}">返回蓝图详情</a>
+  <div class="page-header"><div><h2 class="page-title">部署 {{.Blueprint.Name}}</h2><p class="page-description">将使用当前蓝图参数创建环境并启动预演。</p></div></div>
+  <dl class="summary-grid"><div><dt>Region</dt><dd>{{.Blueprint.Params.Region}}</dd></div><div><dt>资源</dt><dd>{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div></dl>
+  {{if .EnvironmentNameError}}<p class="notice err" id="env-name-error" role="alert">{{.EnvironmentNameError}}</p>{{end}}
+  <form method="post" action="/blueprints/{{.Blueprint.ID}}/deploy">
+    <label class="field">环境名 *<input name="env_name" value="{{.EnvironmentName}}" required{{if .EnvironmentNameError}} aria-invalid="true" aria-describedby="env-name-error env-name-hint"{{else}} aria-describedby="env-name-hint"{{end}}><span class="field-hint" id="env-name-hint">使用易于识别的名称，例如 staging。</span></label>
+    <div class="form-actions"><button class="button-primary" type="submit">启动预演</button><a class="button" href="/blueprints/{{.Blueprint.ID}}">取消</a></div>
+  </form>
+</section>
+{{end}}
