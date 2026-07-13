@@ -2,11 +2,27 @@ package config
 
 import (
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func validKeyB64() string {
 	return base64.StdEncoding.EncodeToString(make([]byte, 32)) // 32 zero bytes
+}
+
+func TestLoadDefaultsToLoopback(t *testing.T) {
+	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+	t.Setenv("HERMES_ADDR", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Addr != "127.0.0.1:8080" {
+		t.Fatalf("Addr = %q, want 127.0.0.1:8080", cfg.Addr)
+	}
 }
 
 func TestLoad(t *testing.T) {
@@ -24,8 +40,8 @@ func TestLoad(t *testing.T) {
 		if cfg.LoginPassword != "secret" {
 			t.Fatalf("LoginPassword = %q", cfg.LoginPassword)
 		}
-		if cfg.Addr != ":8080" {
-			t.Fatalf("Addr = %q, want default :8080", cfg.Addr)
+		if cfg.Addr != "127.0.0.1:8080" {
+			t.Fatalf("Addr = %q, want default 127.0.0.1:8080", cfg.Addr)
 		}
 	})
 
@@ -65,6 +81,33 @@ func TestLoadProvisioningDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultBackendRoundTripsSpecialWorkingDirectory(t *testing.T) {
+	t.Setenv("HERMES_MASTER_KEY", validKeyB64())
+	t.Setenv("HERMES_LOGIN_PASSWORD", "secret")
+	t.Setenv("HERMES_PULUMI_BACKEND", "")
+	workingDirectory := filepath.Join(t.TempDir(), "Hermes #1 ? 100%")
+	if err := os.Mkdir(workingDirectory, 0o755); err != nil {
+		t.Fatalf("Mkdir working directory: %v", err)
+	}
+	t.Chdir(workingDirectory)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	path, isFile, err := LocalPulumiBackendPath(cfg.PulumiBackend)
+	if err != nil {
+		t.Fatalf("LocalPulumiBackendPath: %v", err)
+	}
+	if !isFile {
+		t.Fatalf("PulumiBackend = %q, want local file backend", cfg.PulumiBackend)
+	}
+	want := filepath.Join(workingDirectory, "data", "pulumi-state")
+	if path != want {
+		t.Fatalf("local backend path = %q, want %q (URL %q)", path, want, cfg.PulumiBackend)
+	}
+}
+
 func TestLoadAcceptsSupportedPulumiBackends(t *testing.T) {
 	tests := []string{
 		"file:///tmp/hermes-pulumi-state",
@@ -91,7 +134,14 @@ func TestLoadAcceptsSupportedPulumiBackends(t *testing.T) {
 func TestLoadRejectsBadPulumiBackend(t *testing.T) {
 	tests := []string{
 		"data/pulumi-state",
+		"file:data/pulumi-state",
 		"file://",
+		"file://data/pulumi-state",
+		"file://localhost/tmp/pulumi-state",
+		"file:///tmp/pulumi-state?mode=test",
+		"file:///tmp/pulumi-state#backup",
+		"file:///tmp/data/../pulumi-state",
+		"file:///tmp/data/%2e%2e/pulumi-state",
 		"s3://",
 		"s3:///prefix-only",
 		"azblob://hermes-state",

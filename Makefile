@@ -11,7 +11,7 @@ BINARY := bin/hermes
 PKG    := ./cmd/hermes
 
 .DEFAULT_GOAL := help
-.PHONY: run build css css-watch test vet fmt tidy gen-key env clean help setup-pulumi test-integration
+.PHONY: run build css css-watch test vet fmt tidy gen-key env clean help setup-pulumi test-integration doctor reset-local reset-local-state check
 
 css: ## Build the Tailwind console stylesheet
 	npm run css:build
@@ -30,6 +30,41 @@ test: ## Run all tests
 
 vet: ## Run go vet
 	go vet ./...
+
+doctor: ## Check local Pulumi prerequisites without calling AWS
+	go run $(PKG) doctor
+
+reset-local: ## Remove the local DB (requires CONFIRM=reset; stop Hermes first)
+	@if [ "$${CONFIRM:-}" != "reset" ]; then \
+		echo "refusing reset: set CONFIRM=reset exactly"; \
+		exit 1; \
+	fi
+	go run $(PKG) reset-local --confirm
+
+reset-local-state: ## Remove local Pulumi state (requires CONFIRM=reset-state; optional FORCE=1)
+	@if [ "$${CONFIRM:-}" != "reset-state" ]; then \
+		echo "refusing state reset: set CONFIRM=reset-state exactly"; \
+		exit 1; \
+	fi
+	@if [ -n "$${FORCE:-}" ] && [ "$${FORCE:-}" != "1" ]; then \
+		echo "invalid FORCE value: use FORCE=1 or leave it unset"; \
+		exit 1; \
+	fi
+	go run $(PKG) reset-local-state --confirm $(if $(filter 1,$(FORCE)),--force,)
+
+check: ## Run generated, JS, format, unit, vet, and build checks (no AWS)
+	npm run css:build
+	git diff --exit-code -- internal/web/static/app.css
+	npm run js:test
+	@unformatted="$$(gofmt -l cmd internal)"; \
+		if [ -n "$$unformatted" ]; then \
+			echo "gofmt required:"; \
+			echo "$$unformatted"; \
+			exit 1; \
+		fi
+	GOENV=off GOFLAGS=-tags= go test ./...
+	GOENV=off GOFLAGS=-tags= go vet ./...
+	GOENV=off GOFLAGS=-tags= go build ./...
 
 fmt: ## Format the code
 	go fmt ./...
@@ -61,4 +96,4 @@ test-integration: ## Run the real-AWS integration test (needs pulumi + AWS creds
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-9s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'

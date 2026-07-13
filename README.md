@@ -31,11 +31,14 @@ make env
 
 - `HERMES_MASTER_KEY`：base64 编码的 32 字节主密钥，`make env` 会自动填充。
 - `HERMES_LOGIN_PASSWORD`：本地控制台登录密码。
+- `HERMES_ADDR`：监听地址，默认 `127.0.0.1:8080`，只接受本机连接。
 - `HERMES_DB_PATH`：SQLite 数据库路径，默认 `hermes.db`。
 - `HERMES_PULUMI_BACKEND`：Pulumi state backend，默认
-  `file://<repo>/data/pulumi-state`。如需共享 state，可先创建 S3 bucket，
+  `file://<repo>/data/pulumi-state`（实际值是 hostless absolute URI，例如
+  `file:///absolute/path/to/repo/data/pulumi-state`）。自定义本地 backend 也必须使用
+  `file:///absolute/path`；如需共享 state，可先创建 S3 bucket，
   再设置为 `s3://<bucket>/<optional-prefix>`。Hermes 启动时会校验该值，
-  当前只接受 `file://<path>` 或 `s3://<bucket>[/prefix]`。
+  当前只接受 `file:///absolute/path` 或 `s3://<bucket>[/prefix]`。
 - `HERMES_PULUMI_PROJECT`：Pulumi project 名称，默认 `hermes`。
 - `HERMES_WORKERS`：provisioning worker 数量，默认 `2`。
 
@@ -63,10 +66,12 @@ npm run css:watch
 运行本地检查：
 
 ```bash
-make test
-make vet
-make build
+make check
 ```
+
+`make check` 会重建并校验提交的 CSS、运行 JavaScript 测试、检查 gofmt、运行不带
+integration build tag 的 Go 单元测试、`go vet` 和 `go build`。它不会调用 AWS，也不会
+执行真实 provisioning 集成测试。
 
 启动服务：
 
@@ -74,7 +79,45 @@ make build
 make run
 ```
 
-然后打开 `http://localhost:8080` 访问控制台。
+然后打开 `http://127.0.0.1:8080` 访问控制台。
+
+## 本地诊断与重置
+
+诊断本地 Pulumi CLI 和 AWS/Random resource plugins：
+
+```bash
+make doctor
+```
+
+`doctor` 只执行本机的 `pulumi plugin ls --json`，不需要
+`HERMES_MASTER_KEY`/`HERMES_LOGIN_PASSWORD`，也不会调用 AWS。
+
+重置 SQLite 前必须先停止 Hermes，避免仍在运行的进程继续写数据库或重新创建 sidecar：
+
+```bash
+make reset-local CONFIRM=reset
+```
+
+该命令只删除仓库内配置的 SQLite 文件，以及名称完全匹配的 `-wal`、`-shm`、
+`-journal` sidecar；它会保留备份、无关文件和 Pulumi state。仓库外路径、目录、SQLite
+URI、内存数据库和 symlink escape 都会被拒绝。
+
+删除本地 Pulumi state 是独立且风险更高的操作，同样必须先停止 Hermes：
+
+```bash
+make reset-local-state CONFIRM=reset-state
+# 只有确认本地 stack 文件也应丢弃时：
+make reset-local-state CONFIRM=reset-state FORCE=1
+```
+
+该命令只接受仓库内以 `data/pulumi-state` 结尾的 `file:///absolute/path`
+backend；S3、仓库外路径、其他 source/backup 目录和 symlink escape 都会被拒绝。检测到
+`.pulumi/stacks` 下任何层级的 stack
+文件或备份时，必须额外提供 `FORCE=1`。
+
+**删除 Pulumi state 永远不会删除 AWS 资源。** 如果 state 对应的云资源仍然存在，
+它们可能继续计费并成为 orphaned resources，且之后可能很难由 Hermes/Pulumi 管理或
+安全销毁。只有在确认对应 AWS 资源已被正确销毁或准备承担手工清理责任时，才执行该命令。
 
 ## AWS 编排流程
 

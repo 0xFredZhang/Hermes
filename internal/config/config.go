@@ -23,7 +23,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Addr:          envOr("HERMES_ADDR", ":8080"),
+		Addr:          envOr("HERMES_ADDR", "127.0.0.1:8080"),
 		DBPath:        envOr("HERMES_DB_PATH", "hermes.db"),
 		LoginPassword: os.Getenv("HERMES_LOGIN_PASSWORD"),
 		PulumiProject: envOr("HERMES_PULUMI_PROJECT", "hermes"),
@@ -52,7 +52,8 @@ func Load() (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		cfg.PulumiBackend = "file://" + filepath.Join(cwd, "data", "pulumi-state")
+		statePath := filepath.Join(cwd, "data", "pulumi-state")
+		cfg.PulumiBackend = (&url.URL{Scheme: "file", Path: filepath.ToSlash(statePath)}).String()
 	}
 	if err := validatePulumiBackend(cfg.PulumiBackend); err != nil {
 		return Config{}, err
@@ -78,11 +79,13 @@ func envOr(name, def string) string {
 }
 
 func validatePulumiBackend(backend string) error {
-	if path, ok := strings.CutPrefix(backend, "file://"); ok {
-		if path == "" {
-			return errors.New("HERMES_PULUMI_BACKEND file:// URL requires a state directory path")
+	if _, isFile, err := LocalPulumiBackendPath(backend); isFile {
+		if err != nil {
+			return fmt.Errorf("HERMES_PULUMI_BACKEND: %w", err)
 		}
 		return nil
+	} else if err != nil {
+		return fmt.Errorf("HERMES_PULUMI_BACKEND is not a valid URL: %w", err)
 	}
 
 	u, err := url.Parse(backend)
@@ -96,4 +99,32 @@ func validatePulumiBackend(backend string) error {
 		return errors.New("HERMES_PULUMI_BACKEND s3:// URL requires a bucket name")
 	}
 	return nil
+}
+
+// LocalPulumiBackendPath parses a local file backend. Non-file backends return
+// isFile=false so callers can handle supported remote schemes separately.
+func LocalPulumiBackendPath(backend string) (path string, isFile bool, err error) {
+	parsed, err := url.Parse(backend)
+	if err != nil {
+		return "", false, err
+	}
+	if parsed.Scheme != "file" {
+		return "", false, nil
+	}
+	if parsed.Host != "" || parsed.Opaque != "" || parsed.User != nil {
+		return "", true, errors.New("file backend must use a hostless file:/// URL")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", true, errors.New("file backend must not contain a query or fragment")
+	}
+	for _, component := range strings.Split(parsed.Path, "/") {
+		if component == ".." {
+			return "", true, errors.New("file backend must not contain parent-directory traversal")
+		}
+	}
+	path = filepath.FromSlash(parsed.Path)
+	if path == "" || !filepath.IsAbs(path) {
+		return "", true, errors.New("file backend requires an absolute state directory path")
+	}
+	return filepath.Clean(path), true, nil
 }
