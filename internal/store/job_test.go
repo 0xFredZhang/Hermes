@@ -6,6 +6,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 func seedEnvironment(t *testing.T, s *Store) int64 {
@@ -62,9 +65,9 @@ func TestJobLifecycleAndActiveGuard(t *testing.T) {
 		t.Fatal("HasActiveJob should be false after job succeeded")
 	}
 
-	byEnv, err := s.ListJobsByEnvironment(ctx, envID)
+	byEnv, err := s.ListJobSummariesByEnvironment(ctx, envID)
 	if err != nil || len(byEnv) != 1 {
-		t.Fatalf("ListJobsByEnvironment: %v len=%d", err, len(byEnv))
+		t.Fatalf("ListJobSummariesByEnvironment: %v len=%d", err, len(byEnv))
 	}
 }
 
@@ -110,14 +113,14 @@ func TestOneActiveJobPerEnv(t *testing.T) {
 		t.Fatal("expected unique-constraint error for a second active job on the same env")
 	}
 	// Once the first job is terminal, a new job is allowed again.
-	jobs, _ := s.ListJobsByEnvironment(ctx, envID)
+	jobs, _ := s.ListJobSummariesByEnvironment(ctx, envID)
 	_ = s.UpdateJobStatus(ctx, jobs[0].ID, JobSucceeded)
 	if _, err := s.CreateJob(ctx, Job{EnvironmentID: envID, Action: ActionUp}); err != nil {
 		t.Fatalf("job after terminal should be allowed: %v", err)
 	}
 }
 
-func TestGetLatestFailedJobSkipsNewerNonFailedJobs(t *testing.T) {
+func TestGetLatestFailedJobSkipsNewerSuccessfulJobs(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	envID := seedEnvironment(t, s)
@@ -191,5 +194,49 @@ func TestGetLatestFailedJobDoesNotMaterializePayload(t *testing.T) {
 	}
 	if got.Logs != "" || got.Summary != nil || got.StartedAt.Valid || got.FinishedAt.Valid {
 		t.Fatalf("GetLatestFailedJob materialized payload fields: %+v", got)
+	}
+}
+
+func TestListJobSummariesExcludesLogs(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	envID := seedEnvironment(t, s)
+	jobID, err := s.CreateJob(ctx, Job{
+		EnvironmentID: envID,
+		Action:        ActionPreview,
+		Status:        JobSucceeded,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	largeLogs := strings.Repeat("large-log-sentinel-", 256)
+	if _, err := s.DB().ExecContext(ctx,
+		`UPDATE jobs SET logs = ?, summary_json = '{"creates":2}' WHERE id = ?`,
+		largeLogs, jobID,
+	); err != nil {
+		t.Fatalf("seed job payload: %v", err)
+	}
+
+	conn, err := s.DB().Conn(ctx)
+	if err != nil {
+		t.Fatalf("open SQLite connection: %v", err)
+	}
+	if _, err := sqlite.Limit(conn, sqlite3.SQLITE_LIMIT_LENGTH, 1024); err != nil {
+		_ = conn.Close()
+		t.Fatalf("set SQLite length limit: %v", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("release SQLite connection: %v", err)
+	}
+
+	jobs, err := s.ListJobSummariesByEnvironment(ctx, envID)
+	if err != nil {
+		t.Fatalf("ListJobSummariesByEnvironment selected logs: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ID != jobID || jobs[0].Summary["creates"] != float64(2) {
+		t.Fatalf("summaries = %+v, want job %d with parsed summary", jobs, jobID)
+	}
+	if _, err := s.GetJob(ctx, jobID); err == nil {
+		t.Fatal("GetJob unexpectedly read the oversized log below SQLite's length limit")
 	}
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -28,27 +29,66 @@ func addEnvironmentRoutes(mux *http.ServeMux, d Deps) {
 		})
 	})
 	mux.HandleFunc("GET /environments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		env, err := d.Store.GetEnvironment(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+		id, ok := parsePositivePathID(w, r)
+		if !ok {
 			return
 		}
-		jobs, _ := d.Store.ListJobsByEnvironment(r.Context(), id)
-		data := envViewData(r.Context(), d, env, jobs)
+		env, err := d.Store.GetEnvironment(r.Context(), id)
+		if err != nil {
+			writeStoreReadError(w, r, err, "load environment")
+			return
+		}
+		jobs, err := d.Store.ListJobSummariesByEnvironment(r.Context(), id)
+		if err != nil {
+			http.Error(w, "load job history", http.StatusInternalServerError)
+			return
+		}
+		data, err := envViewData(r.Context(), d, env, jobs)
+		if err != nil {
+			http.Error(w, "load environment details", http.StatusInternalServerError)
+			return
+		}
 		data["Error"] = r.URL.Query().Get("error")
 		d.Renderer.Render(w, "environment_detail", data)
 	})
 	mux.HandleFunc("GET /environments/{id}/status", func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		env, err := d.Store.GetEnvironment(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+		id, ok := parsePositivePathID(w, r)
+		if !ok {
 			return
 		}
-		jobs, _ := d.Store.ListJobsByEnvironment(r.Context(), id)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = d.Renderer.RenderPartial(w, "env_status", envViewData(r.Context(), d, env, jobs))
+		env, err := d.Store.GetEnvironment(r.Context(), id)
+		if err != nil {
+			writeStoreReadError(w, r, err, "load environment")
+			return
+		}
+		jobs, err := d.Store.ListJobSummariesByEnvironment(r.Context(), id)
+		if err != nil {
+			http.Error(w, "load job history", http.StatusInternalServerError)
+			return
+		}
+		data, err := envViewData(r.Context(), d, env, jobs)
+		if err != nil {
+			http.Error(w, "load environment details", http.StatusInternalServerError)
+			return
+		}
+		writeHTMLPartial(w, d, "env_status", data)
+	})
+	mux.HandleFunc("GET /environments/{id}/jobs", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := parsePositivePathID(w, r)
+		if !ok {
+			return
+		}
+		env, err := d.Store.GetEnvironment(r.Context(), id)
+		if err != nil {
+			writeStoreReadError(w, r, err, "load environment")
+			return
+		}
+		jobs, err := d.Store.ListJobSummariesByEnvironment(r.Context(), id)
+		if err != nil {
+			http.Error(w, "load job history", http.StatusInternalServerError)
+			return
+		}
+		writeHTMLPartial(w, d, "job_history", jobHistoryData(env, jobs))
 	})
 	mux.HandleFunc("POST /environments/{id}/preview", enqueueHandler(d, store.ActionPreview))
 	mux.HandleFunc("POST /environments/{id}/up", enqueueHandler(d, store.ActionUp))
@@ -177,16 +217,18 @@ func revealRedisCredentialsHandler(d Deps) http.HandlerFunc {
 	}
 }
 
-// envViewData is the template payload shared by the detail page and the status
-// fragment: the environment, active stream or terminal logs, a
-// preview plan string, and a formatted public-IP list.
-func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []store.Job) map[string]any {
+// envViewData is the template payload shared by the detail page and status
+// fragment: the environment, lightweight job history, active stream metadata,
+// plan summaries, and formatted outputs.
+func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []store.JobSummary) (map[string]any, error) {
+	history := jobHistoryData(env, jobs)
 	// Initialize every key the templates reference so missing values render as
 	// empty strings (a map miss would otherwise print "<no value>").
 	data := map[string]any{
 		"PageTitle": "环境详情", "ActiveNav": "environments",
 		"Env": env, "CurrentJobActive": false,
-		"CurrentJobStreamURL": "", "CurrentLogs": "", "Plan": "",
+		"StatusPolling":       environmentStatusNeedsPolling(env.Status),
+		"CurrentJobStreamURL": "", "CurrentJob": jobView{}, "Plan": "",
 		"DestroyPlan": "",
 		"RefreshPlan": "",
 		"PublicIPs":   "", "PublicDNS": "",
@@ -195,14 +237,16 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 		"HasRDSSecret":  false,
 		"RedisEndpoint": "", "RedisReader": "", "RedisPort": "",
 		"HasRedisSecret": false,
+		"Jobs":           history["Jobs"],
+		"HasActiveJobs":  history["HasActiveJobs"],
 	}
-	if len(jobs) > 0 {
-		switch jobs[0].Status {
-		case store.JobQueued, store.JobRunning:
+	for _, job := range jobs {
+		if job.Status == store.JobQueued || job.Status == store.JobRunning {
 			data["CurrentJobActive"] = true
-			data["CurrentJobStreamURL"] = "/jobs/" + strconv.FormatInt(jobs[0].ID, 10) + "/logs/stream"
-		case store.JobSucceeded, store.JobFailed:
-			data["CurrentLogs"] = jobs[0].Logs
+			data["StatusPolling"] = true
+			data["CurrentJobStreamURL"] = "/jobs/" + strconv.FormatInt(job.ID, 10) + "/logs/stream"
+			data["CurrentJob"] = jobViewFromSummary(job)
+			break
 		}
 	}
 	for _, j := range jobs {
@@ -237,16 +281,59 @@ func envViewData(ctx context.Context, d Deps, env store.Environment, jobs []stor
 		data["RedisPort"] = formatScalar(env.Outputs["redis_port"])
 	}
 	if env.Status == store.EnvUp && data["RDSEndpoint"] != "" {
-		if has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRDSMySQL); err == nil {
-			data["HasRDSSecret"] = has
+		has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRDSMySQL)
+		if err != nil {
+			return nil, err
 		}
+		data["HasRDSSecret"] = has
 	}
 	if env.Status == store.EnvUp && data["RedisEndpoint"] != "" {
-		if has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRedisAuth); err == nil {
-			data["HasRedisSecret"] = has
+		has, err := d.Store.HasEnvironmentSecret(ctx, env.ID, store.SecretRedisAuth)
+		if err != nil {
+			return nil, err
+		}
+		data["HasRedisSecret"] = has
+	}
+	return data, nil
+}
+
+func environmentStatusNeedsPolling(status string) bool {
+	switch status {
+	case store.EnvPreviewing,
+		store.EnvDestroyPreviewing,
+		store.EnvProvisioning,
+		store.EnvRefreshing,
+		store.EnvDestroying:
+		return true
+	default:
+		return false
+	}
+}
+
+func jobHistoryData(env store.Environment, jobs []store.JobSummary) map[string]any {
+	views := jobViews(jobs)
+	hasActiveJobs := false
+	for _, job := range views {
+		if job.Active {
+			hasActiveJobs = true
+			break
 		}
 	}
-	return data
+	return map[string]any{
+		"Env":           env,
+		"Jobs":          views,
+		"HasActiveJobs": hasActiveJobs,
+	}
+}
+
+func writeHTMLPartial(w http.ResponseWriter, d Deps, name string, data any) {
+	var body bytes.Buffer
+	if err := d.Renderer.RenderPartial(&body, name, data); err != nil {
+		http.Error(w, "render response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body.Bytes())
 }
 
 func formatIPs(v any) string {
@@ -269,6 +356,18 @@ func formatScalar(v any) string {
 }
 
 func formatChangeSummary(summary map[string]any) string {
+	if len(summary) == 0 {
+		return ""
+	}
 	return fmt.Sprintf("%v 创建 / %v 更新 / %v 删除 / %v 不变",
-		summary["creates"], summary["updates"], summary["deletes"], summary["sames"])
+		changeCount(summary, "creates"), changeCount(summary, "updates"),
+		changeCount(summary, "deletes"), changeCount(summary, "sames"))
+}
+
+func changeCount(summary map[string]any, key string) any {
+	value, ok := summary[key]
+	if !ok {
+		return 0
+	}
+	return value
 }

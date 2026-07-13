@@ -40,6 +40,7 @@ func NewRenderer() (*Renderer, error) {
 		"blueprint_delete":   "templates/blueprint_delete.html",
 		"environments":       "templates/environments.html",
 		"environment_detail": "templates/environment_detail.html",
+		"job_detail":         "templates/job_detail.html",
 	}
 	r := &Renderer{pages: map[string]*template.Template{}}
 	for name, file := range pageFiles {

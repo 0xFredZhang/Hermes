@@ -13,7 +13,7 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRenderer: %v", err)
 	}
-	for _, name := range []string{"login", "accounts", "account_form", "projects", "project_form", "blueprints", "blueprint_form", "blueprint_detail", "blueprint_deploy", "blueprint_delete", "environments", "environment_detail"} {
+	for _, name := range []string{"login", "accounts", "account_form", "projects", "project_form", "blueprints", "blueprint_form", "blueprint_detail", "blueprint_deploy", "blueprint_delete", "environments", "environment_detail", "job_detail"} {
 		if r.pages[name] == nil {
 			t.Fatalf("page %q not parsed", name)
 		}
@@ -45,6 +45,7 @@ func TestStaticAppCSSIsEmbedded(t *testing.T) {
 		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`,
 		`@media (max-width:39.999rem){.responsive-table-wrap{border:0`,
 		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
+		`.job-history-wrap`, `.status-badge`, `.diagnostic-grid`, `.log-panel-full`, `.copy-log-status`,
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
@@ -57,7 +58,7 @@ func TestStaticAppJSIsEmbeddedWithProgressiveEnhancements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("static app script must be embedded: %v", err)
 	}
-	for _, want := range []string{"data-password-toggle", "htmx:confirm", "showModal", "aria-pressed", "data-disclosure", "aria-expanded", "data-redis-enabled", "data-redis-auth", "HermesBlueprintMetadata"} {
+	for _, want := range []string{"data-password-toggle", "htmx:confirm", "showModal", "aria-pressed", "data-disclosure", "aria-expanded", "data-redis-enabled", "data-redis-auth", "HermesBlueprintMetadata", "data-job-stream-url", "EventSource", "data-copy-log", "navigator.clipboard", "#job-history"} {
 		if !strings.Contains(string(js), want) {
 			t.Fatalf("static app script missing %q", want)
 		}

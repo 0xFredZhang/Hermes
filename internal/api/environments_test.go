@@ -35,7 +35,7 @@ func TestEnvironmentUpEnqueuesJob(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionUp {
 		t.Fatalf("up job not enqueued: %+v", jobs)
 	}
@@ -49,9 +49,9 @@ func TestPendingEnvironmentPreviewRecoveryEnqueuesJob(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
 	}
-	jobs, err := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	jobs, err := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 	if err != nil {
-		t.Fatalf("ListJobsByEnvironment: %v", err)
+		t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].Action != store.ActionPreview || jobs[0].Status != store.JobQueued {
 		t.Fatalf("pending recovery did not enqueue preview job: %+v", jobs)
@@ -67,7 +67,7 @@ func TestEnvironmentDestroyPreviewEnqueuesJob(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionDestroyPreview {
 		t.Fatalf("destroy preview job not enqueued: %+v", jobs)
 	}
@@ -86,9 +86,9 @@ func TestEnvironmentDestroyPreviewFromPreviewReadyAndFailedEnqueuesJob(t *testin
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("status = %d, want 303", rec.Code)
 			}
-			jobs, err := d.Store.ListJobsByEnvironment(context.Background(), envID)
+			jobs, err := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 			if err != nil {
-				t.Fatalf("ListJobsByEnvironment: %v", err)
+				t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 			}
 			if len(jobs) != 1 || jobs[0].Action != store.ActionDestroyPreview || jobs[0].Status != store.JobQueued {
 				t.Fatalf("destroy preview job from %s not enqueued: %+v", status, jobs)
@@ -106,7 +106,7 @@ func TestEnvironmentRefreshEnqueuesJob(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(context.Background(), envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionRefresh {
 		t.Fatalf("refresh job not enqueued: %+v", jobs)
 	}
@@ -134,9 +134,9 @@ func TestEnvironmentActionsRejectInvalidStates(t *testing.T) {
 
 			rec := authedPost(t, d, "/environments/"+itoa(envID)+tt.path, url.Values{})
 			assertActionRedirectError(t, rec, envID, "当前环境状态不允许此操作，请刷新后重试")
-			jobs, err := d.Store.ListJobsByEnvironment(context.Background(), envID)
+			jobs, err := d.Store.ListJobSummariesByEnvironment(context.Background(), envID)
 			if err != nil {
-				t.Fatalf("ListJobsByEnvironment: %v", err)
+				t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 			}
 			if len(jobs) != 0 {
 				t.Fatalf("invalid action created jobs: %+v", jobs)
@@ -166,9 +166,9 @@ func TestEnvironmentActionShowsBusyReason(t *testing.T) {
 	if !strings.Contains(page.Body.String(), "环境正在执行其他任务，请稍后再试") {
 		t.Fatalf("redirected detail page did not show busy recovery message: %s", page.Body.String())
 	}
-	jobs, err := d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, err := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if err != nil {
-		t.Fatalf("ListJobsByEnvironment: %v", err)
+		t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].Action != store.ActionRefresh {
 		t.Fatalf("busy action changed jobs: %+v", jobs)
@@ -192,7 +192,7 @@ func TestEnvironmentDestroyRequiresPreviewWhenUp(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if len(jobs) != 0 {
 		t.Fatalf("direct destroy from up should not enqueue before preview: %+v", jobs)
 	}
@@ -202,7 +202,7 @@ func TestEnvironmentDestroyRequiresPreviewWhenUp(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ = d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, _ = d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if len(jobs) != 1 || jobs[0].Action != store.ActionDestroy {
 		t.Fatalf("confirmed destroy not enqueued: %+v", jobs)
 	}
@@ -222,7 +222,7 @@ func TestCancelDestroyPreviewReturnsEnvironmentToUp(t *testing.T) {
 	if env.Status != store.EnvUp {
 		t.Fatalf("env status = %q, want up", env.Status)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if len(jobs) != 0 {
 		t.Fatalf("cancel destroy preview should not enqueue a job: %+v", jobs)
 	}
@@ -251,9 +251,9 @@ func TestCancelDestroyPreviewCannotRaceQueuedDestroy(t *testing.T) {
 		if env.Status != store.EnvDestroyPreviewReady || env.ResumeStatus != store.EnvUp {
 			t.Fatalf("cancel raced queued destroy and changed environment: %+v", env)
 		}
-		jobs, err := d.Store.ListJobsByEnvironment(ctx, envID)
+		jobs, err := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 		if err != nil {
-			t.Fatalf("ListJobsByEnvironment: %v", err)
+			t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 		}
 		if len(jobs) != 1 || jobs[0].Action != store.ActionDestroy || jobs[0].Status != store.JobQueued {
 			t.Fatalf("queued destroy changed during cancellation: %+v", jobs)
@@ -290,9 +290,9 @@ func TestCancelDestroyPreviewCannotRaceQueuedDestroy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetEnvironment: %v", err)
 		}
-		jobs, err := d.Store.ListJobsByEnvironment(ctx, envID)
+		jobs, err := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 		if err != nil {
-			t.Fatalf("ListJobsByEnvironment: %v", err)
+			t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 		}
 		switch env.Status {
 		case store.EnvUp:
@@ -329,7 +329,7 @@ func TestRetryReusesFailedAction(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	jobs, _ := d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, _ := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if jobs[0].Action != store.ActionDestroy || jobs[0].Status != store.JobQueued {
 		t.Fatalf("retry enqueued %+v, want a queued destroy (reuse failed action)", jobs[0])
 	}
@@ -345,16 +345,16 @@ func TestRetryDoesNotDefaultToUp(t *testing.T) {
 
 	rec := authedPost(t, d, "/environments/"+itoa(envID)+"/retry", url.Values{})
 	assertActionRedirectError(t, rec, envID, "没有可重试的失败任务")
-	jobs, err := d.Store.ListJobsByEnvironment(ctx, envID)
+	jobs, err := d.Store.ListJobSummariesByEnvironment(ctx, envID)
 	if err != nil {
-		t.Fatalf("ListJobsByEnvironment: %v", err)
+		t.Fatalf("ListJobSummariesByEnvironment: %v", err)
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("retry without failed history defaulted to a new action: %+v", jobs)
 	}
 }
 
-func TestEnvironmentDetailStreamsOnlyActiveJob(t *testing.T) {
+func TestEnvironmentDetailDoesNotOpenSSEForTerminalJob(t *testing.T) {
 	tests := []struct {
 		name       string
 		jobStatus  string
@@ -397,20 +397,281 @@ func TestEnvironmentDetailStreamsOnlyActiveJob(t *testing.T) {
 			}
 
 			body := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
-			streamMarker := `new EventSource("/jobs/` + itoa(jobID) + `/logs/stream")`
-			escapedStreamMarker := strings.ReplaceAll(streamMarker, "/", `\/`)
-			streamPresent := strings.Contains(body, streamMarker) || strings.Contains(body, escapedStreamMarker)
+			streamMarker := `data-job-stream-url="/jobs/` + itoa(jobID) + `/logs/stream"`
+			streamPresent := strings.Contains(body, streamMarker)
 			if streamPresent != tt.wantStream {
-				t.Fatalf("EventSource present = %v, want %v for %s Job: %s", streamPresent, tt.wantStream, tt.jobStatus, body)
+				t.Fatalf("stream data present = %v, want %v for %s Job: %s", streamPresent, tt.wantStream, tt.jobStatus, body)
 			}
-			wantPersistedLogs := 0
-			if tt.jobStatus == store.JobSucceeded || tt.jobStatus == store.JobFailed {
-				wantPersistedLogs = 1
+			if strings.Contains(body, "new EventSource") {
+				t.Fatalf("environment template retained inline EventSource code: %s", body)
 			}
-			if got := strings.Count(body, "persisted job log"); got != wantPersistedLogs {
-				t.Fatalf("persisted log count = %d, want %d for %s Job: %s", got, wantPersistedLogs, tt.jobStatus, body)
+			if strings.Contains(body, "persisted job log") {
+				t.Fatalf("environment detail materialized persisted logs for %s Job: %s", tt.jobStatus, body)
+			}
+			if tt.jobStatus != "" && !strings.Contains(body, `/jobs/`+itoa(jobID)) {
+				t.Fatalf("environment history lacks Job detail link for %s: %s", tt.jobStatus, body)
 			}
 		})
+	}
+}
+
+func TestEnvironmentDetailShowsAllJobSummariesNewestFirst(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	ctx := context.Background()
+	envID := seedEnv(t, d)
+
+	previewID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionPreview,
+		Status:        store.JobFailed,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob preview: %v", err)
+	}
+	if err := d.Store.SetJobLogs(ctx, previewID, "historical-log-must-not-load"); err != nil {
+		t.Fatalf("SetJobLogs: %v", err)
+	}
+	if err := d.Store.SetJobError(ctx, previewID, "预演权限不足，请检查账号策略"); err != nil {
+		t.Fatalf("SetJobError: %v", err)
+	}
+	if _, err := d.Store.DB().ExecContext(ctx,
+		`UPDATE jobs SET started_at = '2026-07-13 09:00:00', finished_at = '2026-07-13 09:02:03' WHERE id = ?`,
+		previewID,
+	); err != nil {
+		t.Fatalf("set preview timestamps: %v", err)
+	}
+
+	refreshID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionRefresh,
+		Status:        store.JobSucceeded,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob refresh: %v", err)
+	}
+	if err := d.Store.SetJobSummary(ctx, refreshID, map[string]any{
+		"creates": 1, "updates": 2, "deletes": 3, "sames": 4,
+	}); err != nil {
+		t.Fatalf("SetJobSummary: %v", err)
+	}
+
+	body := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
+	for _, want := range []string{
+		"任务历史", "检测漂移", "预演创建", "成功", "失败",
+		"1 创建 / 2 更新 / 3 删除 / 4 不变", "开始时间", "结束时间", "耗时",
+		`href="/jobs/` + itoa(previewID) + `"`, `href="/jobs/` + itoa(refreshID) + `"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("environment history missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "historical-log-must-not-load") {
+		t.Fatalf("environment history rendered persisted logs: %s", body)
+	}
+	if newer, older := strings.Index(body, `/jobs/`+itoa(refreshID)), strings.Index(body, `/jobs/`+itoa(previewID)); newer < 0 || older < 0 || newer >= older {
+		t.Fatalf("job summaries are not newest first: refresh=%d preview=%d body=%s", newer, older, body)
+	}
+}
+
+func TestEnvironmentJobRowsPollOnlyWhileActive(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	ctx := context.Background()
+	envID := seedEnv(t, d)
+
+	terminalID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionPreview,
+		Status:        store.JobSucceeded,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob terminal: %v", err)
+	}
+	stable := authedGet(t, d, "/environments/"+itoa(envID)+"/jobs")
+	if stable.Code != http.StatusOK {
+		t.Fatalf("stable history status = %d, want 200: %s", stable.Code, stable.Body.String())
+	}
+	if strings.Contains(stable.Body.String(), "hx-trigger") {
+		t.Fatalf("stable history retained polling: %s", stable.Body.String())
+	}
+
+	activeID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionRefresh,
+		Status:        store.JobQueued,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob active: %v", err)
+	}
+	active := authedGet(t, d, "/environments/"+itoa(envID)+"/jobs").Body.String()
+	for _, want := range []string{`id="job-history"`, `hx-get="/environments/` + itoa(envID) + `/jobs"`, `hx-trigger="every 2s"`, `/jobs/` + itoa(activeID), `/jobs/` + itoa(terminalID)} {
+		if !strings.Contains(active, want) {
+			t.Fatalf("active history missing %q: %s", want, active)
+		}
+	}
+
+	if err := d.Store.UpdateJobStatus(ctx, activeID, store.JobSucceeded); err != nil {
+		t.Fatalf("finish active Job: %v", err)
+	}
+	settled := authedGet(t, d, "/environments/"+itoa(envID)+"/jobs").Body.String()
+	if strings.Contains(settled, "hx-trigger") {
+		t.Fatalf("settled history retained polling: %s", settled)
+	}
+}
+
+func TestTransientEnvironmentKeepsStatusPollingAfterTerminalJob(t *testing.T) {
+	for _, environmentStatus := range []string{
+		store.EnvPreviewing,
+		store.EnvDestroyPreviewing,
+		store.EnvProvisioning,
+		store.EnvRefreshing,
+		store.EnvDestroying,
+	} {
+		t.Run(environmentStatus, func(t *testing.T) {
+			d := testDepsWithOrchestrator(t)
+			ctx := context.Background()
+			envID := seedEnv(t, d)
+			jobID, err := d.Store.CreateJob(ctx, store.Job{
+				EnvironmentID: envID,
+				Action:        store.ActionPreview,
+				Status:        store.JobSucceeded,
+			})
+			if err != nil {
+				t.Fatalf("CreateJob: %v", err)
+			}
+			setEnvironmentLifecycleState(t, d, envID, environmentStatus, "")
+
+			page := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
+			statusPoll := `id="status" hx-get="/environments/` + itoa(envID) + `/status" hx-trigger="every 2s"`
+			if !strings.Contains(page, statusPoll) {
+				t.Fatalf("transient environment %q stopped status polling after terminal Job: %s", environmentStatus, page)
+			}
+			if strings.Contains(page, `id="job-history" hx-get="/environments/`+itoa(envID)+`/jobs" hx-trigger`) {
+				t.Fatalf("terminal-only history unexpectedly polls for %q: %s", environmentStatus, page)
+			}
+			if strings.Contains(page, `data-job-stream-url="/jobs/`+itoa(jobID)+`/logs/stream"`) {
+				t.Fatalf("terminal Job opened SSE for %q: %s", environmentStatus, page)
+			}
+
+			fragment := authedGet(t, d, "/environments/"+itoa(envID)+"/status").Body.String()
+			if !strings.Contains(fragment, `hx-trigger="every 2s"`) {
+				t.Fatalf("transient status fragment stopped polling for %q: %s", environmentStatus, fragment)
+			}
+		})
+	}
+}
+
+func TestStableEnvironmentStopsStatusPollingWithTerminalHistory(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	ctx := context.Background()
+	envID := seedEnv(t, d)
+	if _, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionRefresh,
+		Status:        store.JobSucceeded,
+	}); err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	setEnvironmentLifecycleState(t, d, envID, store.EnvUp, "")
+
+	page := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
+	if strings.Contains(page, `hx-trigger="every 2s"`) {
+		t.Fatalf("stable environment retained polling: %s", page)
+	}
+	fragment := authedGet(t, d, "/environments/"+itoa(envID)+"/status").Body.String()
+	if strings.Contains(fragment, `hx-trigger="every 2s"`) {
+		t.Fatalf("stable status fragment retained polling: %s", fragment)
+	}
+}
+
+func TestEnvironmentJobRowsHandleInvalidAndUnknownEnvironmentIDs(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	for _, tt := range []struct {
+		name   string
+		path   string
+		status int
+	}{
+		{name: "malformed", path: "/environments/not-a-number/jobs", status: http.StatusBadRequest},
+		{name: "unknown", path: "/environments/99999/jobs", status: http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := authedGet(t, d, tt.path)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.status, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestEnvironmentDetailReturnsSafe500WhenJobHistoryIsUnavailable(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	envID := seedEnv(t, d)
+	if _, err := d.Store.DB().ExecContext(context.Background(), `ALTER TABLE jobs RENAME TO unavailable_jobs`); err != nil {
+		t.Fatalf("make jobs table unavailable: %v", err)
+	}
+	rec := authedGet(t, d, "/environments/"+itoa(envID))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "load job history") || strings.Contains(body, "no such table") {
+		t.Fatalf("unsafe operational error response: %s", body)
+	}
+}
+
+func TestEnvironmentDetailShowsFailedActionAndRecovery(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	ctx := context.Background()
+	envID := seedEnv(t, d)
+	if err := d.Store.UpdateEnvironmentStatus(ctx, envID, store.EnvFailed); err != nil {
+		t.Fatalf("UpdateEnvironmentStatus: %v", err)
+	}
+	jobID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionDestroy,
+		Status:        store.JobFailed,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if err := d.Store.SetJobError(ctx, jobID, "销毁失败：状态文件被锁定，请释放锁后重试"); err != nil {
+		t.Fatalf("SetJobError: %v", err)
+	}
+
+	body := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
+	for _, want := range []string{"销毁资源", "销毁失败", "重试", `action="/environments/` + itoa(envID) + `/retry"`, `href="/jobs/` + itoa(jobID) + `"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("failed environment lacks %q and recovery path: %s", want, body)
+		}
+	}
+}
+
+func TestEnvironmentHistoryTruncatesUnicodeErrorButJobDetailKeepsFullError(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	ctx := context.Background()
+	envID := seedEnv(t, d)
+	jobID, err := d.Store.CreateJob(ctx, store.Job{
+		EnvironmentID: envID,
+		Action:        store.ActionPreview,
+		Status:        store.JobFailed,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	fullError := strings.Repeat("错", 130) + "full-error-tail"
+	if err := d.Store.SetJobError(ctx, jobID, fullError); err != nil {
+		t.Fatalf("SetJobError: %v", err)
+	}
+
+	history := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
+	if !strings.Contains(history, strings.Repeat("错", 120)+"...") {
+		t.Fatalf("history lacks rune-safe error excerpt: %s", history)
+	}
+	if strings.Contains(history, "full-error-tail") {
+		t.Fatalf("history rendered the complete error instead of an excerpt: %s", history)
+	}
+
+	detail := authedGet(t, d, "/jobs/"+itoa(jobID)).Body.String()
+	if !strings.Contains(detail, fullError) {
+		t.Fatalf("Job detail did not preserve the complete error: %s", detail)
 	}
 }
 

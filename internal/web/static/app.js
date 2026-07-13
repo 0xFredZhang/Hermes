@@ -76,6 +76,82 @@
     syncRedisAuth();
   }
 
+  document.querySelectorAll("[data-job-stream-url]").forEach((log) => {
+    const streamURL = log.dataset.jobStreamUrl;
+    if (!streamURL || typeof EventSource !== "function") return;
+    const status = log.parentElement?.querySelector("[data-job-stream-status]");
+    const stream = new EventSource(streamURL);
+    let streamEnded = false;
+    let opened = false;
+
+    const refreshEnvironmentFragments = () => {
+      if (!window.htmx) return;
+      if (log.dataset.jobStatusUrl) {
+        window.htmx.ajax("GET", log.dataset.jobStatusUrl, { target: "#status", swap: "outerHTML" });
+      }
+      if (log.dataset.jobHistoryUrl) {
+        window.htmx.ajax("GET", log.dataset.jobHistoryUrl, { target: "#job-history", swap: "outerHTML" });
+      }
+    };
+
+    stream.onmessage = (event) => {
+      log.textContent += event.data + "\n";
+      log.scrollTop = log.scrollHeight;
+    };
+    stream.addEventListener("open", () => {
+      if (opened) {
+        // The endpoint replays the complete broker history for every new
+        // connection. Replace the prior snapshot so a reconnect neither
+        // duplicates the backlog nor removes legitimate repeated lines.
+        log.textContent = "";
+        log.scrollTop = 0;
+        if (status) status.textContent = "实时日志已重新连接。";
+      }
+      opened = true;
+    });
+    stream.addEventListener("done", () => {
+      if (streamEnded) return;
+      streamEnded = true;
+      stream.close();
+      if (status) status.textContent = "任务已完成，完整日志可在任务详情中查看。";
+      refreshEnvironmentFragments();
+    });
+    stream.addEventListener("interrupted", () => {
+      if (streamEnded) return;
+      streamEnded = true;
+      stream.close();
+      if (status) status.textContent = "实时日志已中断，任务状态仍在确认中。";
+      refreshEnvironmentFragments();
+    });
+    stream.addEventListener("error", () => {
+      if (!streamEnded && status) status.textContent = "实时日志连接中断，正在重试。";
+    });
+  });
+
+  document.querySelectorAll("[data-copy-log]").forEach((button) => {
+    const target = document.getElementById(button.dataset.copyTarget || button.getAttribute("aria-controls"));
+    if (!(button instanceof HTMLButtonElement) || !(target instanceof HTMLElement)) return;
+    const status = button.parentElement?.querySelector("[data-copy-status]");
+    button.hidden = false;
+    button.addEventListener("click", async () => {
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+        await navigator.clipboard.writeText(target.textContent);
+        if (status) status.textContent = "日志已复制";
+      } catch (_) {
+        const selection = window.getSelection?.();
+        const range = document.createRange?.();
+        if (selection && range) {
+          range.selectNodeContents(target);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        const copied = document.execCommand?.("copy") === true;
+        if (status) status.textContent = copied ? "日志已复制" : "无法自动复制，日志已选中";
+      }
+    });
+  });
+
   const dialog = document.getElementById("confirm-dialog");
   const message = document.getElementById("confirm-message");
   const cancel = document.getElementById("confirm-cancel");

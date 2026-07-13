@@ -27,8 +27,50 @@
 {{end}}
 {{end}}
 
+{{define "job_history"}}
+<div id="job-history" hx-get="/environments/{{.Env.ID}}/jobs"{{if .HasActiveJobs}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML">
+  <div class="table-wrap responsive-table-wrap job-history-wrap">
+    <table class="data-table responsive-table job-history-table">
+      <caption class="sr-only">环境 {{.Env.Name}} 的任务历史，最新任务在前</caption>
+      <thead>
+        <tr><th scope="col">Job</th><th scope="col">操作</th><th scope="col">状态</th><th scope="col">时间</th><th scope="col">结果</th><th scope="col">详情</th></tr>
+      </thead>
+      <tbody>
+        {{template "job_rows" .Jobs}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+{{define "job_rows"}}
+{{range .}}
+<tr>
+  <td data-label="Job"><span class="job-id">#{{.ID}}</span></td>
+  <td data-label="操作"><span class="job-action">{{.ActionLabel}}</span></td>
+  <td data-label="状态"><span class="status-badge status-{{.StatusTone}}">{{.StatusLabel}}</span></td>
+  <td data-label="时间">
+    <dl class="job-times">
+      <div><dt>排队时间</dt><dd>{{.QueuedAt}}</dd></div>
+      <div><dt>开始时间</dt><dd>{{.StartedAt}}</dd></div>
+      <div><dt>结束时间</dt><dd>{{.FinishedAt}}</dd></div>
+      <div><dt>耗时</dt><dd>{{.Duration}}</dd></div>
+    </dl>
+  </td>
+  <td data-label="结果">
+    {{if .Summary}}<p class="job-summary">{{.Summary}}</p>{{end}}
+    {{if .ErrorExcerpt}}<p class="job-error">{{.ErrorExcerpt}}</p>{{end}}
+    {{if and (not .Summary) (not .ErrorExcerpt)}}<span class="muted">暂无摘要</span>{{end}}
+  </td>
+  <td data-label="详情"><a class="button" href="/jobs/{{.ID}}" aria-label="查看 Job #{{.ID}} 详情">查看</a></td>
+</tr>
+{{else}}
+<tr><td colspan="6" class="empty-row">尚无任务记录。部署或执行环境操作后，历史会显示在这里。</td></tr>
+{{end}}
+{{end}}
+
 {{define "env_status"}}
-<div id="status" hx-get="/environments/{{.Env.ID}}/status" hx-trigger="every 2s" hx-swap="outerHTML">
+<div id="status" hx-get="/environments/{{.Env.ID}}/status"{{if .StatusPolling}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML">
   <p class="status-line">状态:<strong class="status-value">{{.Env.Status}}</strong></p>
   {{if eq .Env.Status "pending"}}
     <p class="notice err">初始预演尚未启动</p>

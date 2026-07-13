@@ -33,6 +33,21 @@ type Job struct {
 	CreatedAt     time.Time
 }
 
+// JobSummary is the lightweight historical view used by list pages. Logs are
+// intentionally absent so listing an environment's history cannot materialize
+// large persisted log payloads.
+type JobSummary struct {
+	ID            int64
+	EnvironmentID int64
+	Action        string
+	Status        string
+	Summary       map[string]any
+	Error         string
+	StartedAt     sql.NullTime
+	FinishedAt    sql.NullTime
+	CreatedAt     time.Time
+}
+
 func (s *Store) CreateJob(ctx context.Context, j Job) (int64, error) {
 	if j.Status == "" {
 		j.Status = JobQueued
@@ -79,22 +94,60 @@ func (s *Store) GetLatestFailedJob(ctx context.Context, environmentID int64) (Jo
 	return job, err
 }
 
-func (s *Store) ListJobsByEnvironment(ctx context.Context, envID int64) ([]Job, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+jobCols+` FROM jobs WHERE environment_id = ? ORDER BY id DESC`, envID)
+func scanJobSummary(sc interface{ Scan(...any) error }) (JobSummary, error) {
+	var job JobSummary
+	var summary string
+	if err := sc.Scan(
+		&job.ID,
+		&job.EnvironmentID,
+		&job.Action,
+		&job.Status,
+		&summary,
+		&job.Error,
+		&job.StartedAt,
+		&job.FinishedAt,
+		&job.CreatedAt,
+	); err != nil {
+		return JobSummary{}, err
+	}
+	if summary != "" {
+		if err := json.Unmarshal([]byte(summary), &job.Summary); err != nil {
+			return JobSummary{}, err
+		}
+	}
+	return job, nil
+}
+
+// ListJobSummariesByEnvironment returns newest-first job metadata without
+// selecting the logs column. GetJob is the full-payload historical read.
+func (s *Store) ListJobSummariesByEnvironment(ctx context.Context, environmentID int64) ([]JobSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, environment_id, action, status, summary_json, error,
+		       started_at, finished_at, created_at
+		FROM jobs
+		WHERE environment_id = ?
+		ORDER BY id DESC
+	`, environmentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Job
+
+	var jobs []JobSummary
 	for rows.Next() {
-		j, err := scanJob(rows)
+		job, err := scanJobSummary(rows)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, j)
+		jobs = append(jobs, job)
 	}
-	return out, rows.Err()
+	return jobs, rows.Err()
+}
+
+// ListJobsByEnvironment is retained for internal compatibility. It returns
+// lightweight summaries and never selects persisted logs.
+func (s *Store) ListJobsByEnvironment(ctx context.Context, environmentID int64) ([]JobSummary, error) {
+	return s.ListJobSummariesByEnvironment(ctx, environmentID)
 }
 
 func (s *Store) UpdateJobStatus(ctx context.Context, id int64, status string) error {

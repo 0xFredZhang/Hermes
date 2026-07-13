@@ -146,6 +146,18 @@
     @apply mt-5 mb-3 text-base font-semibold text-console-ink;
   }
 
+  .section-heading {
+    @apply mt-6 mb-3 flex flex-col gap-3 border-t border-console-border pt-5 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .section-heading .section-title {
+    @apply m-0;
+  }
+
+  .section-meta {
+    @apply mt-1 text-sm text-console-muted;
+  }
+
   .back-link {
     @apply mb-3 inline-flex items-center text-sm font-medium text-console-primary;
   }
@@ -376,6 +388,14 @@
     @apply mt-1 break-words text-sm text-console-ink;
   }
 
+  .diagnostic-grid {
+    @apply lg:grid-cols-4;
+  }
+
+  .raw-value {
+    @apply ml-1 rounded-md bg-console-subtle px-1.5 py-0.5 font-mono text-xs text-console-muted;
+  }
+
   .long-value {
     overflow-wrap: anywhere;
   }
@@ -404,8 +424,94 @@
     @apply px-3 py-6 text-center text-sm text-console-muted;
   }
 
+  .job-history-wrap {
+    @apply mt-0;
+  }
+
+  .job-id {
+    @apply font-mono text-sm font-semibold text-console-ink;
+  }
+
+  .job-action {
+    @apply font-medium text-console-ink;
+  }
+
+  .status-badge {
+    @apply inline-flex min-h-7 items-center rounded-md border px-2 py-1 text-xs font-semibold;
+  }
+
+  .status-active {
+    @apply border-console-primary bg-blue-50 text-console-primary-strong;
+  }
+
+  .status-success {
+    @apply border-console-success bg-console-success-soft text-console-success;
+  }
+
+  .status-danger {
+    @apply border-console-danger bg-console-danger-soft text-console-danger;
+  }
+
+  .status-neutral {
+    @apply border-console-border bg-console-subtle text-console-muted;
+  }
+
+  .job-times {
+    @apply m-0 grid min-w-0 gap-1 text-xs sm:min-w-52;
+  }
+
+  .job-times div {
+    @apply grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2;
+  }
+
+  .job-times dt {
+    @apply font-medium text-console-muted;
+  }
+
+  .job-times dd {
+    @apply m-0 font-mono text-console-ink;
+  }
+
+  .job-summary,
+  .job-error {
+    @apply m-0 max-w-80 text-sm;
+  }
+
+  .job-error {
+    @apply mt-1 font-medium text-console-danger;
+  }
+
+  .job-failure {
+    @apply mt-5;
+  }
+
+  .job-failure h3,
+  .job-failure p {
+    @apply mt-0 mb-2;
+  }
+
+  .job-failure a {
+    @apply font-semibold text-console-danger underline underline-offset-2;
+  }
+
   .log-panel {
     @apply max-h-[420px] overflow-auto rounded-md bg-console-log p-4 font-mono text-sm leading-6 text-console-log-text;
+  }
+
+  .log-panel-full {
+    @apply min-h-48 max-h-[70vh] whitespace-pre-wrap break-words;
+  }
+
+  .job-stream-status {
+    @apply mt-2 min-h-6 text-sm text-console-muted;
+  }
+
+  .copy-log-actions {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  .copy-log-status {
+    @apply min-h-6 text-sm font-medium text-console-success;
   }
 
   .htmx-indicator {
