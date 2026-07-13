@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -36,6 +38,23 @@ type accountFormData struct {
 	FieldErrors   map[string]string
 }
 
+type accountDeleteData struct {
+	PageTitle string
+	ActiveNav string
+	HideNav   bool
+	Account   accountDeleteView
+	Error     string
+}
+
+// accountDeleteView deliberately contains no credential fields, so neither a
+// successful confirmation nor an error render can expose stored secrets.
+type accountDeleteView struct {
+	ID            int64
+	Name          string
+	DefaultRegion string
+	AWSAccountID  string
+}
+
 func addAccountRoutes(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("GET /accounts", func(w http.ResponseWriter, r *http.Request) {
 		list, err := d.Store.ListCloudAccounts(r.Context())
@@ -59,17 +78,110 @@ func addAccountRoutes(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("POST /accounts", func(w http.ResponseWriter, r *http.Request) {
 		handleCreateAccount(w, r, d)
 	})
+	mux.HandleFunc("GET /accounts/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleAccountDeleteConfirmation(w, r, d)
+	})
 	mux.HandleFunc("DELETE /accounts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || id < 1 {
-			http.Error(w, "账号 ID 无效", http.StatusBadRequest)
+		handleDeleteAccount(w, r, d, false)
+	})
+	mux.HandleFunc("POST /accounts/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleDeleteAccount(w, r, d, true)
+	})
+}
+
+func handleAccountDeleteConfirmation(w http.ResponseWriter, r *http.Request, d Deps) {
+	id, ok := parseDeleteID(w, r, "", "账号 ID 无效")
+	if !ok {
+		return
+	}
+	account, err := d.Store.GetCloudAccount(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
 			return
 		}
-		if err := d.Store.DeleteCloudAccount(r.Context(), id); err != nil {
-			http.Error(w, "无法删除账号", http.StatusInternalServerError)
+		log.Printf("load account %d delete confirmation: %v", id, err)
+		http.Error(w, "无法读取账号", http.StatusInternalServerError)
+		return
+	}
+	renderAccountDelete(w, d, http.StatusOK, accountDeleteViewFrom(account), "")
+}
+
+func handleDeleteAccount(w http.ResponseWriter, r *http.Request, d Deps, redirect bool) {
+	event := "account-delete-error"
+	if redirect {
+		event = ""
+	}
+	id, ok := parseDeleteID(w, r, event, "账号 ID 无效")
+	if !ok {
+		return
+	}
+
+	var view accountDeleteView
+	if redirect {
+		account, err := d.Store.GetCloudAccount(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.NotFound(w, r)
+				return
+			}
+			log.Printf("load account %d before delete: %v", id, err)
+			http.Error(w, "无法读取账号", http.StatusInternalServerError)
 			return
 		}
-		writeRows(w, r.Context(), d)
+		view = accountDeleteViewFrom(account)
+	}
+
+	if err := d.Store.DeleteCloudAccount(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			writeResourceDeleteError(w, r, "account-delete-error", "账号不存在或已被删除", http.StatusNotFound)
+		case errors.Is(err, store.ErrCloudAccountReferenced):
+			const message = "该账号仍被蓝图或环境引用，无法删除"
+			if redirect {
+				renderAccountDelete(w, d, http.StatusConflict, view, message)
+			} else {
+				writeResourceDeleteError(w, r, "account-delete-error", message, http.StatusConflict)
+			}
+		default:
+			log.Printf("delete account %d: %v", id, err)
+			const message = "无法删除账号，请稍后重试"
+			if redirect {
+				renderAccountDelete(w, d, http.StatusInternalServerError, view, message)
+			} else {
+				writeResourceDeleteError(w, r, "account-delete-error", message, http.StatusInternalServerError)
+			}
+		}
+		return
+	}
+	if redirect {
+		http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+		return
+	}
+
+	body, err := renderAccountRows(r.Context(), d)
+	if err != nil {
+		log.Printf("render accounts after deleting %d: %v", id, err)
+		writeResourceDeleteError(w, r, "account-delete-error", "账号已删除，但列表刷新失败，请重新加载页面", http.StatusInternalServerError)
+		return
+	}
+	writeResourceDeleteSuccess(w, r, "account-delete-success", "账号已删除")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
+func accountDeleteViewFrom(account store.CloudAccount) accountDeleteView {
+	return accountDeleteView{
+		ID: account.ID, Name: account.Name, DefaultRegion: account.DefaultRegion, AWSAccountID: account.AWSAccountID,
+	}
+}
+
+func renderAccountDelete(w http.ResponseWriter, d Deps, status int, account accountDeleteView, message string) {
+	d.Renderer.RenderStatus(w, "account_delete", status, accountDeleteData{
+		PageTitle: "删除账号 · " + account.Name,
+		ActiveNav: "accounts",
+		Account:   account,
+		Error:     message,
 	})
 }
 
@@ -143,19 +255,17 @@ func validateAccountForm(form *accountFormData, secret string) {
 }
 
 func renderAccountForm(w http.ResponseWriter, d Deps, status int, data accountFormData) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	d.Renderer.Render(w, "account_form", data)
+	d.Renderer.RenderStatus(w, "account_form", status, data)
 }
 
-func writeRows(w http.ResponseWriter, ctx context.Context, d Deps) {
+func renderAccountRows(ctx context.Context, d Deps) ([]byte, error) {
 	list, err := d.Store.ListCloudAccounts(ctx)
 	if err != nil {
-		http.Error(w, "无法读取账号", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := d.Renderer.RenderRows(w, list); err != nil {
-		http.Error(w, "无法渲染账号", http.StatusInternalServerError)
+	var body bytes.Buffer
+	if err := d.Renderer.RenderRows(&body, list); err != nil {
+		return nil, err
 	}
+	return body.Bytes(), nil
 }

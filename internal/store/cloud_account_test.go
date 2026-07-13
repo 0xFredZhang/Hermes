@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 )
@@ -86,6 +87,23 @@ func TestDeleteCloudAccount(t *testing.T) {
 	}
 	if _, err := s.GetCloudAccount(ctx, id); err == nil {
 		t.Fatal("expected error getting deleted account")
+	}
+}
+
+func TestDeleteCloudAccountReportsMissingAndReferencedRows(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if err := s.DeleteCloudAccount(ctx, 999); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("DeleteCloudAccount missing error = %v, want sql.ErrNoRows", err)
+	}
+
+	projectID, accountID := seedProjectAndAccount(t, s)
+	if _, err := s.CreateBlueprint(ctx, sampleBlueprint(projectID, accountID)); err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+	if err := s.DeleteCloudAccount(ctx, accountID); !errors.Is(err, ErrCloudAccountReferenced) {
+		t.Fatalf("DeleteCloudAccount referenced error = %v, want ErrCloudAccountReferenced", err)
 	}
 }
 

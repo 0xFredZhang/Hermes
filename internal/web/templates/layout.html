@@ -23,7 +23,7 @@
         <a class="nav-link{{if eq .ActiveNav "projects"}} nav-link-active{{end}}" href="/projects"{{if eq .ActiveNav "projects"}} aria-current="page"{{end}}>项目</a>
         <a class="nav-link{{if eq .ActiveNav "blueprints"}} nav-link-active{{end}}" href="/blueprints"{{if eq .ActiveNav "blueprints"}} aria-current="page"{{end}}>蓝图</a>
         <a class="nav-link{{if eq .ActiveNav "environments"}} nav-link-active{{end}}" href="/environments"{{if eq .ActiveNav "environments"}} aria-current="page"{{end}}>环境</a>
-        <form class="logout-form" method="post" action="/logout"><button class="button-muted">退出</button></form>
+        <form class="logout-form" method="post" action="/logout"><button class="button-muted" data-loading-label="退出中…">退出</button></form>
       </nav>{{end}}
     </header>
     <main class="app-main" id="main-content" tabindex="-1">
@@ -33,7 +33,7 @@
   {{if not .HideNav}}<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <form class="confirm-dialog" method="dialog">
       <h2 class="section-title" id="confirm-title">确认操作</h2>
-      <p id="confirm-message">此操作需要确认。</p>
+      <p id="confirm-message" class="long-value">此操作需要确认。</p>
       <div class="dialog-actions">
         <button id="confirm-cancel" type="button" value="cancel">取消</button>
         <button class="button-danger" id="confirm-submit" type="button" value="confirm">确认</button>

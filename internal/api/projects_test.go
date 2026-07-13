@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -157,4 +158,212 @@ func TestProjectDescriptionErrorIsAssociatedWithTextarea(t *testing.T) {
 			t.Fatalf("valid description field unexpectedly contains %q", forbidden)
 		}
 	}
+}
+
+func createProjectForDelete(t *testing.T, deps Deps, name, description string) int64 {
+	t.Helper()
+	id, err := deps.Store.CreateProject(context.Background(), store.Project{Name: name, Description: description})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	return id
+}
+
+func TestProjectDeleteListAndConfirmationProvideNoJavaScriptPath(t *testing.T) {
+	deps := testDeps(t)
+	projectID := createProjectForDelete(t, deps, strings.Repeat("project-name-", 12), strings.Repeat("description-", 20))
+
+	list := authedGet(t, deps, "/projects")
+	for _, want := range []string{
+		`id="project-feedback"`,
+		`id="project-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden`,
+		`href="/projects/` + itoa(projectID) + `/delete"`,
+		`hx-delete="/projects/` + itoa(projectID) + `"`,
+		`hx-confirm="删除项目`,
+		`data-label="名称" class="long-value"`,
+		`data-label="描述" class="long-value"`,
+	} {
+		if !strings.Contains(list.Body.String(), want) {
+			t.Fatalf("project list missing %q: %s", want, list.Body.String())
+		}
+	}
+
+	confirmation := authedGet(t, deps, "/projects/"+itoa(projectID)+"/delete")
+	if confirmation.Code != http.StatusOK {
+		t.Fatalf("confirmation status = %d; body=%s", confirmation.Code, confirmation.Body.String())
+	}
+	for _, want := range []string{
+		`role="alert"`,
+		`action="/projects/` + itoa(projectID) + `/delete"`,
+		`type="submit"`,
+		`class="long-value"`,
+	} {
+		if !strings.Contains(confirmation.Body.String(), want) {
+			t.Fatalf("project confirmation missing %q: %s", want, confirmation.Body.String())
+		}
+	}
+}
+
+func TestProjectDeleteNoJavaScriptPOSTRedirectsAfterSuccess(t *testing.T) {
+	deps := testDeps(t)
+	projectID := createProjectForDelete(t, deps, "delete-me", "temporary")
+
+	rec := authedPost(t, deps, "/projects/"+itoa(projectID)+"/delete", nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/projects" {
+		t.Fatalf("POST delete status/location = %d %q; body=%s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	if _, err := deps.Store.GetProject(context.Background(), projectID); err == nil {
+		t.Fatal("confirmed POST did not delete project")
+	}
+}
+
+func TestProjectDeleteRejectsMalformedAndMissingIDsAcrossRoutes(t *testing.T) {
+	deps := testDeps(t)
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{method: http.MethodGet, path: "/projects/nope/delete", want: http.StatusBadRequest},
+		{method: http.MethodGet, path: "/projects/999/delete", want: http.StatusNotFound},
+		{method: http.MethodPost, path: "/projects/nope/delete", want: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/projects/999/delete", want: http.StatusNotFound},
+		{method: http.MethodDelete, path: "/projects/nope", want: http.StatusBadRequest},
+		{method: http.MethodDelete, path: "/projects/999", want: http.StatusNotFound},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(deps.Auth.IssueCookie())
+			rec := httptest.NewRecorder()
+			NewRouter(deps).ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestHTMXProjectDeleteMalformedIDExposesSafeFeedbackEvent(t *testing.T) {
+	deps := testDeps(t)
+	req := httptest.NewRequest(http.MethodDelete, "/projects/not-a-number", nil)
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(deps.Auth.IssueCookie())
+	rec := httptest.NewRecorder()
+	NewRouter(deps).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	header := rec.Header().Get("HX-Trigger")
+	if !isASCII(header) {
+		t.Fatalf("HX-Trigger is not transport-safe ASCII: %q", header)
+	}
+	var events map[string]struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(header), &events); err != nil {
+		t.Fatalf("HX-Trigger is invalid JSON: %q: %v", header, err)
+	}
+	if got := events["project-delete-error"].Message; got != "项目 ID 无效" {
+		t.Fatalf("feedback message = %q", got)
+	}
+}
+
+func TestProjectDeleteReferenceFailureUsesRenderedNoJavaScriptAndAnnouncedHTMXErrors(t *testing.T) {
+	deps := testDeps(t)
+	projectID := createProjectForDelete(t, deps, "referenced-project", "still in use")
+	accountID := createAccountForDelete(t, deps, "owner", "007", "stored-secret")
+	if _, err := deps.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: projectID, CloudAccountID: accountID, Name: "reference", Params: validBPParams(),
+	}); err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+
+	post := authedPost(t, deps, "/projects/"+itoa(projectID)+"/delete", nil)
+	if post.Code != http.StatusConflict {
+		t.Fatalf("POST referenced status = %d, want 409; body=%s", post.Code, post.Body.String())
+	}
+	for _, want := range []string{`role="alert"`, "仍有蓝图引用", "referenced-project"} {
+		if !strings.Contains(post.Body.String(), want) {
+			t.Fatalf("POST referenced response missing %q: %s", want, post.Body.String())
+		}
+	}
+	for _, leaked := range []string{"FOREIGN KEY", "constraint failed", "stored-secret"} {
+		if strings.Contains(post.Body.String(), leaked) {
+			t.Fatalf("POST referenced response leaked %q", leaked)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/projects/"+itoa(projectID), nil)
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(deps.Auth.IssueCookie())
+	htmx := httptest.NewRecorder()
+	NewRouter(deps).ServeHTTP(htmx, req)
+	if htmx.Code != http.StatusConflict {
+		t.Fatalf("HTMX referenced status = %d, want 409; body=%s", htmx.Code, htmx.Body.String())
+	}
+	var events map[string]struct {
+		Message string `json:"message"`
+	}
+	header := htmx.Header().Get("HX-Trigger")
+	if !isASCII(header) {
+		t.Fatalf("HX-Trigger is not transport-safe ASCII: %q", header)
+	}
+	if err := json.Unmarshal([]byte(header), &events); err != nil {
+		t.Fatalf("HX-Trigger is invalid JSON: %q: %v", header, err)
+	}
+	if got := events["project-delete-error"].Message; got != "该项目仍有蓝图引用，无法删除" {
+		t.Fatalf("feedback message = %q", got)
+	}
+}
+
+func TestProjectDeleteHTMXSuccessReturnsBufferedRowsAndOperationalFailureIsSafe(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		deps := testDeps(t)
+		targetID := createProjectForDelete(t, deps, "delete-me", "temporary")
+		_ = createProjectForDelete(t, deps, "keep-me", "persistent")
+
+		req := httptest.NewRequest(http.MethodDelete, "/projects/"+itoa(targetID), nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(deps.Auth.IssueCookie())
+		rec := httptest.NewRecorder()
+		NewRouter(deps).ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "keep-me") || strings.Contains(rec.Body.String(), "<!doctype html>") {
+			t.Fatalf("HTMX success status/body = %d %s", rec.Code, rec.Body.String())
+		}
+		assertAfterSwapDeleteSuccess(t, rec, "project-delete-success", "项目已删除")
+	})
+
+	t.Run("operational failure", func(t *testing.T) {
+		deps := testDeps(t)
+		projectID := createProjectForDelete(t, deps, "target", "temporary")
+		if _, err := deps.Store.DB().ExecContext(context.Background(), `CREATE TRIGGER reject_project_delete BEFORE DELETE ON projects BEGIN SELECT RAISE(ABORT, 'sensitive project delete failure'); END`); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodDelete, "/projects/"+itoa(projectID), nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(deps.Auth.IssueCookie())
+		rec := httptest.NewRecorder()
+		NewRouter(deps).ServeHTTP(rec, req)
+		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "sensitive") {
+			t.Fatalf("operational failure status/body = %d %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("no JavaScript operational failure", func(t *testing.T) {
+		deps := testDeps(t)
+		projectID := createProjectForDelete(t, deps, "target-no-js", "temporary")
+		if _, err := deps.Store.DB().ExecContext(context.Background(), `CREATE TRIGGER reject_project_post_delete BEFORE DELETE ON projects BEGIN SELECT RAISE(ABORT, 'sensitive project POST failure'); END`); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
+		rec := authedPost(t, deps, "/projects/"+itoa(projectID)+"/delete", nil)
+		if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "target-no-js") {
+			t.Fatalf("no-JS operational failure status/body = %d %s", rec.Code, rec.Body.String())
+		}
+		for _, leaked := range []string{"sensitive", "constraint failed"} {
+			if strings.Contains(rec.Body.String(), leaked) {
+				t.Fatalf("no-JS operational failure leaked %q", leaked)
+			}
+		}
+	})
 }

@@ -1,20 +1,21 @@
 {{define "content"}}
-<section class="page-panel">
+<section class="page-panel" aria-labelledby="environments-title">
   <div class="page-header">
     <div>
-      <h2 class="page-title">环境</h2>
+      <h2 class="page-title" id="environments-title">环境</h2>
       <p class="page-description">查看每个 Pulumi stack 的状态、输出、日志和销毁流程。</p>
     </div>
   </div>
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead><tr><th>ID</th><th>名称</th><th>Stack</th><th>Region</th><th>状态</th><th>操作</th></tr></thead>
+  <div class="table-wrap responsive-table-wrap">
+    <table class="data-table responsive-table">
+      <caption class="sr-only">Pulumi 环境列表</caption>
+      <thead><tr><th scope="col">ID</th><th scope="col">名称</th><th scope="col">Stack</th><th scope="col">Region</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead>
       <tbody>
       {{range .Environments}}
-        <tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.PulumiStack}}</td><td>{{.Region}}</td><td><span class="status-value">{{.Status}}</span></td>
-            <td><a href="/environments/{{.ID}}">详情</a></td></tr>
+        <tr><td data-label="ID">{{.ID}}</td><td data-label="名称" class="long-value">{{.Name}}</td><td data-label="Stack" class="long-value">{{.PulumiStack}}</td><td data-label="Region" class="long-value">{{.Region}}</td><td data-label="状态">{{template "environment_status_badge" .Status}}</td>
+            <td data-label="操作"><a class="button" href="/environments/{{.ID}}">查看详情</a></td></tr>
       {{else}}
-        <tr><td colspan="6" class="empty-row">暂无环境，去蓝图页部署一个。</td></tr>
+        <tr><td colspan="6" class="empty-row">暂无环境。先准备账号、项目与蓝图，再从<a href="/blueprints">蓝图页启动部署</a>。</td></tr>
       {{end}}
       </tbody>
     </table>

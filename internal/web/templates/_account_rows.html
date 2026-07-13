@@ -1,14 +1,14 @@
 {{define "rows"}}
 {{range .}}
 <tr>
-  <td data-label="别名">{{.Name}}</td>
-  <td data-label="默认区域">{{.DefaultRegion}}</td>
-  <td data-label="Account ID">{{.AWSAccountID}}</td>
+  <td data-label="别名" class="long-value">{{.Name}}</td>
+  <td data-label="默认区域" class="long-value">{{.DefaultRegion}}</td>
+  <td data-label="Account ID" class="long-value">{{.AWSAccountID}}</td>
   <td data-label="ARN" class="long-value">{{.ARN}}</td>
-  <td data-label="操作"><button class="button-danger" type="button" hx-delete="/accounts/{{.ID}}" hx-target="#rows" hx-swap="innerHTML"
-              hx-confirm="删除账号“{{.Name}}”？">删除</button></td>
+  <td data-label="操作"><a class="button button-danger" href="/accounts/{{.ID}}/delete" hx-delete="/accounts/{{.ID}}" hx-target="#rows" hx-swap="innerHTML"
+              hx-confirm="删除账号“{{.Name}}”？" data-loading-label="删除中…">删除</a></td>
 </tr>
 {{else}}
-<tr><td colspan="5" class="empty-row">暂无账号。<a href="/accounts/new">添加 AWS 账号</a>后即可创建蓝图。</td></tr>
+<tr><td colspan="5" class="empty-row">暂无账号。先<a href="/accounts/new">添加 AWS 账号</a>作为部署凭证，再创建项目与蓝图。</td></tr>
 {{end}}
 {{end}}

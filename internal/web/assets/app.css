@@ -9,11 +9,14 @@
   --color-console-surface: #ffffff;
   --color-console-subtle: #eef2f6;
   --color-console-border: #d8dee7;
+  /* >= 3:1 against surface, canvas, and subtle control backgrounds. */
+  --color-console-border-strong: #7f8b9b;
   --color-console-ink: #111827;
   --color-console-muted: #4b5563;
   --color-console-soft: #6b7280;
   --color-console-primary: #255f85;
   --color-console-primary-strong: #174565;
+  --color-console-primary-soft: #edf5fa;
   --color-console-danger: #b42318;
   --color-console-danger-soft: #fef3f2;
   --color-console-success: #087443;
@@ -40,13 +43,14 @@
     color: var(--color-console-ink);
     background: var(--color-console-canvas);
     font-family: var(--font-sans);
-    font-size: 0.9375rem;
+    font-size: 1rem;
     line-height: 1.5;
   }
 
   a {
     color: var(--color-console-primary);
     text-decoration: none;
+    transition: color 160ms cubic-bezier(0.25, 1, 0.5, 1);
   }
 
   a:hover {
@@ -55,13 +59,25 @@
     text-underline-offset: 3px;
   }
 
+  a:active {
+    color: var(--color-console-primary-strong);
+  }
+
   :focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-console-primary) 78%, white);
-    outline-offset: 2px;
+    outline: 3px solid var(--color-console-primary);
+    outline-offset: 3px;
   }
 
   textarea {
     font: inherit;
+  }
+
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
   }
 }
 
@@ -75,7 +91,8 @@
   }
 
   .skip-link {
-    @apply fixed top-3 left-3 z-50 -translate-y-20 rounded-md bg-console-ink px-3 py-2 font-medium text-white no-underline transition-transform;
+    @apply fixed top-3 left-3 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-md bg-console-ink px-3 py-2 font-medium text-white no-underline transition-transform;
+    min-height: 44px;
   }
 
   .skip-link:focus {
@@ -123,7 +140,7 @@
   }
 
   .app-main {
-    @apply flex-1 pb-8;
+    @apply min-w-0 flex-1 pb-8;
   }
 
   .page-panel {
@@ -136,6 +153,7 @@
 
   .page-title {
     @apply m-0 text-xl font-semibold text-console-ink;
+    overflow-wrap: anywhere;
   }
 
   .page-description {
@@ -159,7 +177,10 @@
   }
 
   .back-link {
-    @apply mb-3 inline-flex items-center text-sm font-medium text-console-primary;
+    @apply mb-3 inline-flex min-h-11 items-center text-sm font-medium text-console-primary;
+    max-width: 100%;
+    min-height: 44px;
+    overflow-wrap: anywhere;
   }
 
   .form-surface {
@@ -215,15 +236,15 @@
   }
 
   .field-group {
-    @apply rounded-md border border-console-border bg-console-surface p-4;
+    @apply rounded-none border-0 border-t border-console-border bg-transparent px-0 py-4;
   }
 
   .field-group + .field-group {
-    @apply mt-4;
+    @apply mt-2;
   }
 
   .field-legend {
-    @apply mb-3 text-sm font-semibold text-console-ink;
+    @apply mb-3 pr-3 text-sm font-semibold text-console-ink;
   }
 
   .field {
@@ -236,7 +257,17 @@
   input:not([type="checkbox"]),
   select,
   textarea {
-    @apply mt-1 min-h-11 w-full rounded-md border border-console-border bg-white px-3 py-2 text-base text-console-ink transition-colors placeholder:text-console-muted sm:text-sm;
+    @apply mt-1 min-h-11 w-full rounded-md border border-console-border-strong bg-console-surface px-3 py-2 text-base text-console-ink transition-colors placeholder:text-console-muted;
+    min-height: 44px;
+  }
+
+  .field > input:not([type="checkbox"]):hover:not(:disabled),
+  .field > select:hover:not(:disabled),
+  .input-control:hover:not(:disabled),
+  input:not([type="checkbox"]):hover:not(:disabled),
+  select:hover:not(:disabled),
+  textarea:hover:not(:disabled) {
+    @apply border-console-primary;
   }
 
   .field > input:not([type="checkbox"]):focus,
@@ -245,11 +276,37 @@
   input:not([type="checkbox"]):focus,
   select:focus,
   textarea:focus {
-    @apply border-console-primary outline-none ring-2 ring-console-primary/20;
+    @apply border-console-primary ring-2 ring-console-primary/20;
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    @apply border-console-danger;
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    @apply cursor-not-allowed bg-console-subtle text-console-muted opacity-70;
   }
 
   input[type="checkbox"] {
-    @apply mr-2 h-4 w-4 rounded border-console-border text-console-primary align-[-2px];
+    @apply m-0 h-5 w-5 shrink-0 rounded border-console-border-strong text-console-primary;
+  }
+
+  .checkbox-field {
+    @apply flex min-h-11 items-center gap-2 text-sm font-medium text-console-ink;
+    min-height: 44px;
+  }
+
+  .checkbox-field label {
+    @apply flex min-h-11 cursor-pointer items-center;
+    min-height: 44px;
+  }
+
+  .checkbox-grid {
+    @apply mb-2;
   }
 
   .select-search {
@@ -258,42 +315,114 @@
 
   .button,
   button {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-border bg-white px-3 py-2 text-sm font-medium text-console-ink transition-colors;
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-border-strong bg-console-surface px-3 py-2 text-sm font-medium text-console-ink transition-colors;
+    min-height: 44px;
   }
 
-  .button:hover,
-  button:hover {
+  .button,
+  .button-primary,
+  .button-danger {
+    text-decoration: none;
+  }
+
+  .button:not([aria-disabled="true"]):not([aria-busy="true"]):hover,
+  .button-primary:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):hover,
+  .button-danger:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):hover {
+    text-decoration: none;
+  }
+
+  .button:not([aria-disabled="true"]):not([aria-busy="true"]):hover,
+  button:not(:disabled):hover {
     @apply border-console-primary bg-console-subtle text-console-primary-strong;
   }
 
-  .button:active,
-  button:active {
-    @apply bg-slate-200;
+  .button:not([aria-disabled="true"]):not([aria-busy="true"]):active,
+  button:not(:disabled):active {
+    @apply border-console-primary-strong bg-console-border text-console-primary-strong;
   }
 
   .button-primary {
     @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-primary bg-console-primary px-3 py-2 text-sm font-medium text-white transition-colors;
+    min-height: 44px;
   }
 
-  .button-primary:hover {
+  .button-primary:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):hover {
     @apply border-console-primary-strong bg-console-primary-strong text-white;
   }
 
-  .button-danger {
-    @apply border-console-danger bg-white text-console-danger;
+  .button-primary:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):active {
+    @apply border-console-primary-strong bg-console-primary-strong text-white;
+    filter: brightness(0.9);
   }
 
-  .button-danger:hover {
+  .button-danger {
+    @apply border-console-danger bg-console-surface text-console-danger;
+  }
+
+  .button-danger:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):hover {
     @apply border-console-danger bg-console-danger text-white;
   }
 
+  .button-danger:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):active {
+    @apply border-console-danger bg-console-danger text-white;
+    filter: brightness(0.88);
+  }
+
   .button-muted {
-    @apply border-console-border bg-console-subtle text-console-muted;
+    @apply border-console-border-strong bg-console-subtle text-console-muted;
+  }
+
+  .button-muted:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):hover {
+    @apply border-console-border-strong bg-console-surface text-console-ink;
+  }
+
+  .button-muted:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):active {
+    @apply border-console-border-strong bg-console-border text-console-ink;
   }
 
   button:disabled,
-  .button:disabled {
+  .button:disabled,
+  .button[aria-disabled="true"] {
     @apply cursor-not-allowed opacity-50;
+    pointer-events: none;
+  }
+
+  button[aria-busy="true"],
+  .button[aria-busy="true"],
+  select[aria-busy="true"],
+  input[aria-busy="true"] {
+    cursor: progress;
+    opacity: 1;
+    pointer-events: none;
+  }
+
+  [data-metadata-source][aria-busy="true"] {
+    border-color: var(--color-console-primary);
+    background-color: var(--color-console-primary-soft);
+    box-shadow: inset 4px 0 0 var(--color-console-primary);
+  }
+
+  button[data-loading-label]::after,
+  .button[data-loading-label]::after {
+    width: 1rem;
+    height: 1rem;
+    margin-left: 0.5rem;
+    visibility: hidden;
+    flex: 0 0 1rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    content: "";
+  }
+
+  button[data-loading-label][aria-busy="true"]::after,
+  .button[data-loading-label][aria-busy="true"]::after {
+    visibility: visible;
+    animation: hermes-busy-spin 700ms linear infinite;
+  }
+
+  .htmx-request {
+    cursor: progress;
   }
 
   .inline-form {
@@ -310,10 +439,21 @@
 
   .disclosure-toggle {
     @apply min-h-11 border-transparent bg-transparent px-0 text-console-ink;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .disclosure-label {
+    @apply flex min-h-11 items-center text-console-ink;
+    min-height: 44px;
   }
 
   .disclosure-toggle:hover {
     @apply border-transparent bg-transparent text-console-primary-strong;
+  }
+
+  .disclosure-toggle:active {
+    @apply border-transparent bg-console-subtle text-console-primary-strong;
   }
 
   .password-control {
@@ -332,6 +472,14 @@
     @apply mb-4 rounded-md border px-3 py-2 text-sm;
   }
 
+  .form-error-summary {
+    @apply flex flex-col items-start gap-1;
+  }
+
+  .form-error-summary p {
+    @apply m-0;
+  }
+
   .err {
     @apply border-console-danger bg-console-danger-soft text-console-danger;
   }
@@ -340,16 +488,17 @@
     @apply border-console-success bg-console-success-soft text-console-success;
   }
 
+  .warning {
+    @apply border-console-warning bg-console-warning-soft text-console-warning;
+  }
+
   .muted {
     @apply text-console-muted;
   }
 
   .status-line {
-    @apply mb-3 rounded-md border border-console-border bg-console-subtle px-3 py-2 text-sm text-console-muted;
-  }
-
-  .status-value {
-    @apply font-semibold text-console-ink;
+    @apply mb-3 flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-console-border-strong bg-console-subtle px-3 py-2 text-sm text-console-muted;
+    min-height: 44px;
   }
 
   .output-grid {
@@ -357,7 +506,7 @@
   }
 
   .output-section {
-    @apply rounded-md border border-console-border bg-white p-3;
+    @apply min-w-0 rounded-md border border-console-border bg-console-surface p-3;
   }
 
   .output-title {
@@ -366,10 +515,11 @@
 
   .output-line {
     @apply my-1 break-words text-sm text-console-muted;
+    overflow-wrap: anywhere;
   }
 
   .table-wrap {
-    @apply mt-4 overflow-x-auto rounded-md border border-console-border;
+    @apply mt-4 max-w-full overflow-x-auto rounded-md border border-console-border-strong;
   }
 
   .summary-grid {
@@ -394,6 +544,7 @@
 
   .raw-value {
     @apply ml-1 rounded-md bg-console-subtle px-1.5 py-0.5 font-mono text-xs text-console-muted;
+    overflow-wrap: anywhere;
   }
 
   .long-value {
@@ -401,11 +552,11 @@
   }
 
   .data-table {
-    @apply w-full border-collapse bg-white text-left text-sm;
+    @apply w-full border-collapse bg-console-surface text-left text-sm;
   }
 
   .data-table th {
-    @apply border-b border-console-border bg-console-subtle px-3 py-2 font-semibold text-console-muted;
+    @apply border-b border-console-border-strong bg-console-subtle px-3 py-2 font-semibold text-console-muted;
   }
 
   .data-table td {
@@ -416,12 +567,18 @@
     @apply border-b-0;
   }
 
-  .data-table tbody tr:hover td {
-    @apply bg-slate-50;
-  }
-
   .empty-row {
     @apply px-3 py-6 text-center text-sm text-console-muted;
+  }
+
+  .data-table a:not(.button),
+  .empty-row a,
+  .notice a,
+  .summary-grid a {
+    @apply inline-flex min-h-11 items-center font-medium;
+    max-width: 100%;
+    min-height: 44px;
+    overflow-wrap: anywhere;
   }
 
   .job-history-wrap {
@@ -441,7 +598,7 @@
   }
 
   .status-active {
-    @apply border-console-primary bg-blue-50 text-console-primary-strong;
+    @apply border-console-primary bg-console-primary-soft text-console-primary-strong;
   }
 
   .status-success {
@@ -454,6 +611,10 @@
 
   .status-neutral {
     @apply border-console-border bg-console-subtle text-console-muted;
+  }
+
+  .status-warning {
+    @apply border-console-warning bg-console-warning-soft text-console-warning;
   }
 
   .job-times {
@@ -488,6 +649,7 @@
   .job-failure h3,
   .job-failure p {
     @apply mt-0 mb-2;
+    overflow-wrap: anywhere;
   }
 
   .job-failure a {
@@ -495,11 +657,13 @@
   }
 
   .log-panel {
-    @apply max-h-[420px] overflow-auto rounded-md bg-console-log p-4 font-mono text-sm leading-6 text-console-log-text;
+    @apply min-h-48 max-h-[420px] max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-console-log p-4 font-mono text-sm leading-6 text-console-log-text;
+    height: clamp(12rem, 50vh, 26.25rem);
   }
 
   .log-panel-full {
     @apply min-h-48 max-h-[70vh] whitespace-pre-wrap break-words;
+    height: min(70vh, 40rem);
   }
 
   .job-stream-status {
@@ -524,7 +688,7 @@
   }
 
   dialog {
-    @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-md border border-console-border bg-console-surface p-0 text-console-ink;
+    @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-md border border-console-border-strong bg-console-surface p-0 text-console-ink;
   }
 
   dialog::backdrop {
@@ -541,6 +705,12 @@
 
   .dialog-actions {
     @apply mt-5 flex justify-end gap-3;
+  }
+}
+
+@keyframes hermes-busy-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -577,7 +747,7 @@
 
   .responsive-table tbody tr {
     overflow: hidden;
-    border: 1px solid var(--color-console-border);
+    border: 1px solid var(--color-console-border-strong);
     border-radius: 6px;
     background: var(--color-console-surface);
   }
@@ -604,6 +774,12 @@
   }
 }
 
+@media (hover: hover) {
+  .data-table tbody tr:hover td {
+    @apply bg-console-canvas;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -612,5 +788,11 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  button[data-loading-label][aria-busy="true"]::after,
+  .button[data-loading-label][aria-busy="true"]::after {
+    animation: none !important;
+    border-style: dotted;
   }
 }

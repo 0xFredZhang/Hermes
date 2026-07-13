@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -277,4 +278,244 @@ func TestDeepPageMarksActiveNavigation(t *testing.T) {
 	if strings.Count(body, `aria-current="page"`) != 1 {
 		t.Fatalf("active navigation count = %d, want 1", strings.Count(body, `aria-current="page"`))
 	}
+}
+
+func createAccountForDelete(t *testing.T, deps Deps, name, suffix, secret string) int64 {
+	t.Helper()
+	id, err := deps.Store.CreateCloudAccount(context.Background(), store.CloudAccount{
+		Name: name, DefaultRegion: "ap-southeast-1", AccessKeyID: "AKIA" + suffix,
+		SecretAccessKey: secret, AWSAccountID: "100000000" + suffix,
+		ARN: "arn:aws:iam::100000000" + suffix + ":user/delete-test",
+	})
+	if err != nil {
+		t.Fatalf("CreateCloudAccount: %v", err)
+	}
+	return id
+}
+
+func TestAccountDeleteListAndConfirmationProvideNoJavaScriptPathWithoutSecrets(t *testing.T) {
+	deps := testDeps(t)
+	const secret = "must-never-appear-in-delete-ui"
+	const accessKey = "AKIA001"
+	accountID := createAccountForDelete(t, deps, strings.Repeat("account-name-", 12), "001", secret)
+
+	list := authedGet(t, deps, "/accounts")
+	for _, want := range []string{
+		`id="account-feedback"`,
+		`id="account-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden`,
+		`href="/accounts/` + itoa(accountID) + `/delete"`,
+		`hx-delete="/accounts/` + itoa(accountID) + `"`,
+		`hx-confirm="删除账号`,
+		`data-label="别名" class="long-value"`,
+		`data-label="默认区域" class="long-value"`,
+	} {
+		if !strings.Contains(list.Body.String(), want) {
+			t.Fatalf("account list missing %q: %s", want, list.Body.String())
+		}
+	}
+	for _, leaked := range []string{secret, accessKey} {
+		if strings.Contains(list.Body.String(), leaked) {
+			t.Fatalf("account list exposed credential %q", leaked)
+		}
+	}
+
+	confirmation := authedGet(t, deps, "/accounts/"+itoa(accountID)+"/delete")
+	if confirmation.Code != http.StatusOK {
+		t.Fatalf("confirmation status = %d; body=%s", confirmation.Code, confirmation.Body.String())
+	}
+	for _, want := range []string{
+		`role="alert"`,
+		`action="/accounts/` + itoa(accountID) + `/delete"`,
+		`type="submit"`,
+		`class="long-value"`,
+	} {
+		if !strings.Contains(confirmation.Body.String(), want) {
+			t.Fatalf("account confirmation missing %q: %s", want, confirmation.Body.String())
+		}
+	}
+	for _, leaked := range []string{secret, accessKey} {
+		if strings.Contains(confirmation.Body.String(), leaked) {
+			t.Fatalf("account confirmation exposed credential %q", leaked)
+		}
+	}
+}
+
+func TestAccountDeleteNoJavaScriptPOSTRedirectsAfterSuccess(t *testing.T) {
+	deps := testDeps(t)
+	accountID := createAccountForDelete(t, deps, "delete-me", "002", "stored-secret")
+
+	rec := authedPost(t, deps, "/accounts/"+itoa(accountID)+"/delete", nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/accounts" {
+		t.Fatalf("POST delete status/location = %d %q; body=%s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	if _, err := deps.Store.GetCloudAccount(context.Background(), accountID); err == nil {
+		t.Fatal("confirmed POST did not delete account")
+	}
+}
+
+func TestAccountDeleteRejectsMalformedAndMissingIDsAcrossRoutes(t *testing.T) {
+	deps := testDeps(t)
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{method: http.MethodGet, path: "/accounts/nope/delete", want: http.StatusBadRequest},
+		{method: http.MethodGet, path: "/accounts/999/delete", want: http.StatusNotFound},
+		{method: http.MethodPost, path: "/accounts/nope/delete", want: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/accounts/999/delete", want: http.StatusNotFound},
+		{method: http.MethodDelete, path: "/accounts/nope", want: http.StatusBadRequest},
+		{method: http.MethodDelete, path: "/accounts/999", want: http.StatusNotFound},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(deps.Auth.IssueCookie())
+			rec := httptest.NewRecorder()
+			NewRouter(deps).ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestHTMXAccountDeleteMalformedIDExposesSafeFeedbackEvent(t *testing.T) {
+	deps := testDeps(t)
+	req := httptest.NewRequest(http.MethodDelete, "/accounts/not-a-number", nil)
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(deps.Auth.IssueCookie())
+	rec := httptest.NewRecorder()
+	NewRouter(deps).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	header := rec.Header().Get("HX-Trigger")
+	if !isASCII(header) {
+		t.Fatalf("HX-Trigger is not transport-safe ASCII: %q", header)
+	}
+	var events map[string]struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(header), &events); err != nil {
+		t.Fatalf("HX-Trigger is invalid JSON: %q: %v", header, err)
+	}
+	if got := events["account-delete-error"].Message; got != "账号 ID 无效" {
+		t.Fatalf("feedback message = %q", got)
+	}
+}
+
+func TestAccountDeleteReferenceFailureUsesRenderedNoJavaScriptAndAnnouncedHTMXErrors(t *testing.T) {
+	deps := testDeps(t)
+	const secret = "referenced-account-secret"
+	accountID := createAccountForDelete(t, deps, "referenced-account", "003", secret)
+	projectID, err := deps.Store.CreateProject(context.Background(), store.Project{Name: "owner"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if _, err := deps.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: projectID, CloudAccountID: accountID, Name: "reference", Params: validBPParams(),
+	}); err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+
+	post := authedPost(t, deps, "/accounts/"+itoa(accountID)+"/delete", nil)
+	if post.Code != http.StatusConflict {
+		t.Fatalf("POST referenced status = %d, want 409; body=%s", post.Code, post.Body.String())
+	}
+	for _, want := range []string{`role="alert"`, "仍被蓝图或环境引用", "referenced-account"} {
+		if !strings.Contains(post.Body.String(), want) {
+			t.Fatalf("POST referenced response missing %q: %s", want, post.Body.String())
+		}
+	}
+	for _, leaked := range []string{secret, "FOREIGN KEY", "constraint failed"} {
+		if strings.Contains(post.Body.String(), leaked) {
+			t.Fatalf("POST referenced response leaked %q", leaked)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/accounts/"+itoa(accountID), nil)
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(deps.Auth.IssueCookie())
+	htmx := httptest.NewRecorder()
+	NewRouter(deps).ServeHTTP(htmx, req)
+	if htmx.Code != http.StatusConflict {
+		t.Fatalf("HTMX referenced status = %d, want 409; body=%s", htmx.Code, htmx.Body.String())
+	}
+	var events map[string]struct {
+		Message string `json:"message"`
+	}
+	header := htmx.Header().Get("HX-Trigger")
+	if !isASCII(header) {
+		t.Fatalf("HX-Trigger is not transport-safe ASCII: %q", header)
+	}
+	if err := json.Unmarshal([]byte(header), &events); err != nil {
+		t.Fatalf("HX-Trigger is invalid JSON: %q: %v", header, err)
+	}
+	if got := events["account-delete-error"].Message; got != "该账号仍被蓝图或环境引用，无法删除" {
+		t.Fatalf("feedback message = %q", got)
+	}
+}
+
+func TestAccountDeleteHTMXSuccessReturnsBufferedRowsAndOperationalFailureIsSafe(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		deps := testDeps(t)
+		targetID := createAccountForDelete(t, deps, "delete-me", "004", "target-secret")
+		_ = createAccountForDelete(t, deps, "keep-me", "005", "kept-secret")
+
+		req := httptest.NewRequest(http.MethodDelete, "/accounts/"+itoa(targetID), nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(deps.Auth.IssueCookie())
+		rec := httptest.NewRecorder()
+		NewRouter(deps).ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "keep-me") || strings.Contains(rec.Body.String(), "<!doctype html>") {
+			t.Fatalf("HTMX success status/body = %d %s", rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "kept-secret") {
+			t.Fatal("HTMX account rows exposed a stored secret")
+		}
+		assertAfterSwapDeleteSuccess(t, rec, "account-delete-success", "账号已删除")
+	})
+
+	t.Run("operational failure", func(t *testing.T) {
+		deps := testDeps(t)
+		accountID := createAccountForDelete(t, deps, "target", "006", "stored-secret")
+		if _, err := deps.Store.DB().ExecContext(context.Background(), `CREATE TRIGGER reject_account_delete BEFORE DELETE ON cloud_accounts BEGIN SELECT RAISE(ABORT, 'sensitive account delete failure'); END`); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodDelete, "/accounts/"+itoa(accountID), nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(deps.Auth.IssueCookie())
+		rec := httptest.NewRecorder()
+		NewRouter(deps).ServeHTTP(rec, req)
+		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "sensitive") {
+			t.Fatalf("operational failure status/body = %d %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("no JavaScript operational failure", func(t *testing.T) {
+		deps := testDeps(t)
+		accountID := createAccountForDelete(t, deps, "target-no-js", "008", "stored-secret")
+		if _, err := deps.Store.DB().ExecContext(context.Background(), `CREATE TRIGGER reject_account_post_delete BEFORE DELETE ON cloud_accounts BEGIN SELECT RAISE(ABORT, 'sensitive account POST failure'); END`); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
+		rec := authedPost(t, deps, "/accounts/"+itoa(accountID)+"/delete", nil)
+		if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "target-no-js") {
+			t.Fatalf("no-JS operational failure status/body = %d %s", rec.Code, rec.Body.String())
+		}
+		for _, leaked := range []string{"sensitive", "stored-secret", "constraint failed"} {
+			if strings.Contains(rec.Body.String(), leaked) {
+				t.Fatalf("no-JS operational failure leaked %q", leaked)
+			}
+		}
+	})
+}
+
+func isASCII(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] > 0x7f {
+			return false
+		}
+	}
+	return true
 }

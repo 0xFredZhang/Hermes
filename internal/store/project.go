@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -11,6 +14,10 @@ type Project struct {
 	Description string
 	CreatedAt   time.Time
 }
+
+// ErrProjectReferenced is returned when a blueprint still belongs to the
+// project and the database refuses its deletion.
+var ErrProjectReferenced = errors.New("project is referenced")
 
 func (s *Store) CreateProject(ctx context.Context, p Project) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
@@ -49,6 +56,19 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 func (s *Store) DeleteProject(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id)
-	return err
+	res, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id)
+	if err != nil {
+		if isSQLiteForeignKeyConstraint(err) {
+			return fmt.Errorf("%w: %v", ErrProjectReferenced, err)
+		}
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

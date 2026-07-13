@@ -1,0 +1,19 @@
+{{define "content"}}
+<section class="page-panel" aria-labelledby="account-delete-title">
+  <a class="back-link" href="/accounts">返回账号列表</a>
+  <div class="page-header"><div><h2 class="page-title" id="account-delete-title">删除 AWS 云账号</h2><p class="page-description">请在继续前确认目标与影响。</p></div></div>
+  {{if .Error}}
+  <div class="notice err" role="alert"><p>{{.Error}}</p></div>
+  {{else}}
+  <div class="notice err" role="alert"><p>即将永久删除账号“<span class="long-value">{{.Account.Name}}</span>”。仍有蓝图或环境引用时，Hermes 会拒绝删除。</p></div>
+  {{end}}
+  <dl class="summary-grid">
+    <div><dt>别名</dt><dd class="long-value">{{.Account.Name}}</dd></div>
+    <div><dt>默认区域</dt><dd class="long-value">{{.Account.DefaultRegion}}</dd></div>
+    <div><dt>Account ID</dt><dd class="long-value">{{.Account.AWSAccountID}}</dd></div>
+  </dl>
+  <form method="post" action="/accounts/{{.Account.ID}}/delete">
+    <div class="form-actions"><button class="button-danger" type="submit" data-loading-label="删除中…">确认删除</button><a class="button" href="/accounts">取消</a></div>
+  </form>
+</section>
+{{end}}

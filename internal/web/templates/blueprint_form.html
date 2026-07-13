@@ -1,32 +1,119 @@
 {{define "content"}}
 {{$f := .Form}}
-<section class="page-panel blueprint-form-page">
+<section class="page-panel blueprint-form-page" aria-labelledby="blueprint-form-title">
   <a class="back-link" href="/blueprints">返回蓝图</a>
-  <div class="page-header"><div><h2 class="page-title">{{.PageTitle}}</h2><p class="page-description">{{if eq .Mode "edit"}}编辑只影响未来部署，现有环境快照不会更改。{{else}}保存后可从详情页部署。{{end}}</p></div></div>
-  {{if .Error}}<div class="notice err" role="alert"><p>{{.Error}}</p>{{range $name, $message := .FieldErrors}}<a href="#field-{{$name}}">{{$message}}</a>{{end}}</div>{{end}}
-  {{if not .Projects}}<p class="notice err">需要先创建项目：<a href="/projects/new">新建项目</a></p>{{end}}
-  {{if not .Accounts}}<p class="notice err">需要先添加云账号：<a href="/accounts/new">添加 AWS 云账号</a></p>{{end}}
+  <div class="page-header">
+    <div>
+      <h2 class="page-title" id="blueprint-form-title">{{.PageTitle}}</h2>
+      <p class="page-description">{{if eq .Mode "edit"}}编辑只影响未来部署，现有环境快照不会更改。{{else}}保存后可从详情页部署。{{end}}</p>
+    </div>
+  </div>
+  {{if .Error}}<div class="notice err form-error-summary" role="alert"><p>{{.Error}}</p>{{range $name, $message := .FieldErrors}}<a href="#field-{{$name}}">{{$message}}</a>{{end}}</div>{{end}}
+  {{if or (not .Projects) (not .Accounts)}}
+  <div class="notice warning" id="blueprint-prerequisites" role="status">
+    <p>创建蓝图前需要项目与 AWS 云账号。</p>
+    <div class="action-group">
+      {{if not .Accounts}}<a href="/accounts/new">添加 AWS 云账号</a>{{end}}
+      {{if not .Projects}}<a href="/projects/new">新建项目</a>{{end}}
+    </div>
+  </div>
+  {{end}}
   <form method="post" action="{{.FormAction}}" novalidate>
     {{if eq .Mode "duplicate"}}<input type="hidden" name="blueprint_mode" value="duplicate"><input type="hidden" name="source_blueprint_id" value="{{.SourceBlueprintID}}">{{end}}
-    <fieldset class="field-group"><legend class="field-legend">归属</legend><div class="form-grid">
-      <label class="field" id="field-name">名称 *<input name="name" value="{{$f.Name}}" required{{if index .FieldErrors "name"}} aria-invalid="true" aria-describedby="error-name"{{end}}>{{with index .FieldErrors "name"}}<span class="field-error" id="error-name">{{.}}</span>{{end}}</label>
-      <label class="field" id="field-project_id">项目 *<select name="project_id" required{{if index .FieldErrors "project_id"}} aria-invalid="true" aria-describedby="error-project_id"{{end}}><option value="">请选择</option>{{range .Projects}}<option value="{{.ID}}"{{if eq .ID $f.ProjectID}} selected{{end}}>{{.Name}}</option>{{end}}</select>{{with index .FieldErrors "project_id"}}<span class="field-error" id="error-project_id">{{.}}</span>{{end}}</label>
-      <label class="field" id="field-cloud_account_id">云账号 *<select name="cloud_account_id" data-metadata-source="account" required{{if index .FieldErrors "cloud_account_id"}} aria-invalid="true" aria-describedby="error-cloud_account_id"{{end}} hx-get="/blueprints/regions" hx-trigger="change, load" hx-target="#region-select" hx-swap="innerHTML" hx-include="[name='selected_region']"><option value="">请选择</option>{{range .Accounts}}<option value="{{.ID}}"{{if eq .ID $f.CloudAccountID}} selected{{end}}>{{.Name}} ({{.AWSAccountID}})</option>{{end}}</select>{{with index .FieldErrors "cloud_account_id"}}<span class="field-error" id="error-cloud_account_id">{{.}}</span>{{end}}</label>
-    </div></fieldset>
-    <input type="hidden" name="selected_region" data-selection-hint="region" value="{{$f.Params.Region}}"><input type="hidden" name="selected_instance_type" data-selection-hint="instanceType" value="{{$f.Params.EC2.InstanceType}}"><input type="hidden" name="selected_ami" data-selection-hint="ami" value="{{$f.Params.EC2.AMI}}">
-    <div class="form-grid select-filters"><label class="field">搜索 Region<input type="search" class="select-search" data-filter-select="#region-select" oninput="filterSelectOptions(this)"></label><label class="field">搜索实例规格<input type="search" class="select-search" data-filter-select="#instance-type-select" oninput="filterSelectOptions(this)"></label></div>
-    <fieldset class="field-group" id="field-params"{{if index .FieldErrors "params"}} aria-describedby="error-params"{{end}}><legend class="field-legend">计算与访问</legend><div class="form-grid">
-      <label class="field">Region *<select name="region" id="region-select" data-metadata-source="region" required{{if eq .ParamErrorField "region"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/instance-types" hx-trigger="change" hx-target="#instance-type-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='selected_instance_type']"><option value="{{$f.Params.Region}}" selected>{{$f.Params.Region}}</option></select></label>
-      <label class="field">实例规格 *<select name="instance_type" id="instance-type-select" data-metadata-source="instanceType" required{{if eq .ParamErrorField "instance_type"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/amis" hx-trigger="change" hx-target="#ami-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type'],[name='selected_ami']"><option value="{{$f.Params.EC2.InstanceType}}" selected>{{$f.Params.EC2.InstanceType}}{{if eq $f.Params.EC2.InstanceType "t3.micro"}} · 2C1G{{end}}</option></select></label>
-      <label class="field">AMI<select name="ami" id="ami-select"><option value="{{$f.Params.EC2.AMI}}" selected>{{if $f.Params.EC2.AMI}}{{$f.Params.EC2.AMI}}{{else}}自动:最新 Ubuntu 26.04 LTS{{end}}</option></select></label>
-      <label class="field">数量 *<input name="count" type="number" value="{{$f.Params.EC2.Count}}" min="1" max="10" required{{if eq .ParamErrorField "count"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">系统盘 GB *<input name="root_volume_gb" type="number" value="{{$f.Params.EC2.RootVolumeGB}}" min="8" required{{if eq .ParamErrorField "root_volume_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">Key Pair<input name="key_name" value="{{$f.Params.EC2.KeyName}}"></label>
-      <label class="field">入站规则<select name="ingress_mode"><option value="none"{{if not .HasIngress}} selected{{end}}>无入站规则</option><option value="rule"{{if .HasIngress}} selected{{end}}>配置一条规则</option></select></label>
-      <label class="field">入站端口<input name="ingress_port" type="number" value="{{.IngressPort}}"{{if eq .ParamErrorField "ingress_port"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">协议<select name="ingress_protocol"{{if eq .ParamErrorField "ingress_protocol"}} aria-invalid="true" aria-describedby="error-params"{{end}}><option value=""{{if not .HasIngress}} selected{{end}}>请选择</option><option value="tcp"{{if eq .IngressProtocol "tcp"}} selected{{end}}>tcp</option><option value="udp"{{if eq .IngressProtocol "udp"}} selected{{end}}>udp</option></select></label><label class="field">来源 CIDR<input name="ingress_cidr" value="{{.IngressCIDR}}"{{if eq .ParamErrorField "ingress_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label>
-    </div>{{with index .FieldErrors "params"}}<p class="field-error" id="error-params">{{.}}</p>{{end}}</fieldset>
-    <fieldset class="field-group disclosure" data-disclosure><legend class="field-legend"><button type="button" class="disclosure-toggle" aria-expanded="{{if $f.Params.Network.Enabled}}true{{else}}false{{end}}" aria-controls="network-fields">VPC</button></legend><div id="network-fields"><label class="field"><input name="network_enabled" type="checkbox"{{if $f.Params.Network.Enabled}} checked{{end}}> 创建 Hermes VPC</label><div class="form-grid"><label class="field">VPC CIDR<input name="network_vpc_cidr" value="{{$f.Params.Network.VPCCIDR}}"{{if eq .ParamErrorField "network_vpc_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">公网子网 CIDR<input name="network_public_subnet_cidrs" value="{{range $i,$v := $f.Params.Network.PublicSubnetCIDRs}}{{if $i}},{{end}}{{$v}}{{end}}"{{if eq .ParamErrorField "network_public_subnet_cidrs"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label></div></div></fieldset>
-    <fieldset class="field-group disclosure" data-disclosure><legend class="field-legend"><button type="button" class="disclosure-toggle" aria-expanded="{{if $f.Params.RDS.Enabled}}true{{else}}false{{end}}" aria-controls="rds-fields">MySQL</button></legend><div id="rds-fields"><label class="field"><input name="rds_enabled" type="checkbox"{{if $f.Params.RDS.Enabled}} checked{{end}}> 启用 MySQL</label><div class="form-grid"><label class="field">版本<input name="rds_engine_version" value="{{$f.Params.RDS.EngineVersion}}"{{if eq .ParamErrorField "rds_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">规格<input name="rds_instance_class" value="{{$f.Params.RDS.InstanceClass}}"{{if eq .ParamErrorField "rds_instance_class"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">存储 GB<input name="rds_allocated_storage_gb" type="number" value="{{$f.Params.RDS.AllocatedStorageGB}}" min="20"{{if eq .ParamErrorField "rds_allocated_storage_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">数据库名<input name="rds_db_name" value="{{$f.Params.RDS.DBName}}"{{if eq .ParamErrorField "rds_db_name"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">用户名<input name="rds_username" value="{{$f.Params.RDS.Username}}"{{if eq .ParamErrorField "rds_username"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label></div></div></fieldset>
-    <fieldset class="field-group disclosure" data-disclosure><legend class="field-legend"><button type="button" class="disclosure-toggle" aria-expanded="{{if $f.Params.Redis.Enabled}}true{{else}}false{{end}}" aria-controls="redis-fields">Redis</button></legend><div id="redis-fields"><label class="field"><input name="redis_enabled" type="checkbox" data-redis-enabled{{if $f.Params.Redis.Enabled}} checked{{end}}> 启用 Redis</label><div class="form-grid"><label class="field">AUTH <input name="redis_auth_enabled" type="checkbox" data-redis-auth{{if and $f.Params.Redis.Enabled $f.Params.Redis.AuthEnabled}} checked{{end}}>启用</label><label class="field">版本<input name="redis_engine_version" value="{{$f.Params.Redis.EngineVersion}}"{{if eq .ParamErrorField "redis_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">规格<input name="redis_node_type" value="{{$f.Params.Redis.NodeType}}"{{if eq .ParamErrorField "redis_node_type"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label><label class="field">节点数<input name="redis_node_count" type="number" value="{{$f.Params.Redis.NodeCount}}" min="1" max="5"{{if eq .ParamErrorField "redis_node_count"}} aria-invalid="true" aria-describedby="error-params"{{end}}></label></div></div></fieldset>
-    <div class="form-actions"><button class="button-primary" type="submit">{{.SubmitLabel}}</button><a class="button" href="/blueprints">取消</a></div>
+    <fieldset class="field-group">
+      <legend class="field-legend">归属</legend>
+      <div class="form-grid">
+        <div class="field" id="field-name">
+          <label class="field-label" for="blueprint-name">名称 *</label>
+          <input id="blueprint-name" name="name" value="{{$f.Name}}" required{{if index .FieldErrors "name"}} aria-invalid="true" aria-describedby="error-name"{{end}}>
+          {{with index .FieldErrors "name"}}<span class="field-error" id="error-name" role="alert">{{.}}</span>{{end}}
+        </div>
+        <div class="field" id="field-project_id">
+          <label class="field-label" for="blueprint-project">项目 *</label>
+          <select id="blueprint-project" name="project_id" required{{if index .FieldErrors "project_id"}} aria-invalid="true" aria-describedby="error-project_id"{{end}}>
+            <option value="">请选择</option>
+            {{range .Projects}}<option value="{{.ID}}"{{if eq .ID $f.ProjectID}} selected{{end}}>{{.Name}}</option>{{end}}
+          </select>
+          {{with index .FieldErrors "project_id"}}<span class="field-error" id="error-project_id" role="alert">{{.}}</span>{{end}}
+        </div>
+        <div class="field" id="field-cloud_account_id">
+          <label class="field-label" for="blueprint-account">云账号 *</label>
+          <select id="blueprint-account" name="cloud_account_id" data-metadata-source="account" required{{if index .FieldErrors "cloud_account_id"}} aria-invalid="true" aria-describedby="error-cloud_account_id"{{end}} hx-get="/blueprints/regions" hx-trigger="change, load" hx-target="#region-select" hx-swap="innerHTML" hx-include="[name='selected_region']">
+            <option value="">请选择</option>
+            {{range .Accounts}}<option value="{{.ID}}"{{if eq .ID $f.CloudAccountID}} selected{{end}}>{{.Name}} ({{.AWSAccountID}})</option>{{end}}
+          </select>
+          {{with index .FieldErrors "cloud_account_id"}}<span class="field-error" id="error-cloud_account_id" role="alert">{{.}}</span>{{end}}
+        </div>
+      </div>
+    </fieldset>
+
+    <input type="hidden" name="selected_region" data-selection-hint="region" value="{{$f.Params.Region}}">
+    <input type="hidden" name="selected_instance_type" data-selection-hint="instanceType" value="{{$f.Params.EC2.InstanceType}}">
+    <input type="hidden" name="selected_ami" data-selection-hint="ami" value="{{$f.Params.EC2.AMI}}">
+
+    <div class="form-grid select-filters">
+      <div class="field"><label class="field-label" for="region-search">搜索 Region</label><input id="region-search" type="search" class="select-search" data-filter-select="#region-select" oninput="filterSelectOptions(this)"></div>
+      <div class="field"><label class="field-label" for="instance-type-search">搜索实例规格</label><input id="instance-type-search" type="search" class="select-search" data-filter-select="#instance-type-select" oninput="filterSelectOptions(this)"></div>
+    </div>
+
+    <fieldset class="field-group" id="field-params"{{if index .FieldErrors "params"}} aria-describedby="error-params"{{end}}>
+      <legend class="field-legend">计算与访问</legend>
+      <div class="form-grid">
+        <div class="field"><label class="field-label" for="region-select">Region *</label><select name="region" id="region-select" data-metadata-source="region" required{{if eq .ParamErrorField "region"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/instance-types" hx-trigger="change" hx-target="#instance-type-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='selected_instance_type']"><option value="{{$f.Params.Region}}" selected>{{$f.Params.Region}}</option></select></div>
+        <div class="field"><label class="field-label" for="instance-type-select">实例规格 *</label><select name="instance_type" id="instance-type-select" data-metadata-source="instanceType" required{{if eq .ParamErrorField "instance_type"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/amis" hx-trigger="change" hx-target="#ami-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type'],[name='selected_ami']"><option value="{{$f.Params.EC2.InstanceType}}" selected>{{$f.Params.EC2.InstanceType}}{{if eq $f.Params.EC2.InstanceType "t3.micro"}} · 2C1G{{end}}</option></select></div>
+        <div class="field"><label class="field-label" for="ami-select">AMI</label><select name="ami" id="ami-select"><option value="{{$f.Params.EC2.AMI}}" selected>{{if $f.Params.EC2.AMI}}{{$f.Params.EC2.AMI}}{{else}}自动:最新 Ubuntu 26.04 LTS{{end}}</option></select></div>
+        <div class="field"><label class="field-label" for="instance-count">数量 *</label><input id="instance-count" name="count" type="number" value="{{$f.Params.EC2.Count}}" min="1" max="10" required{{if eq .ParamErrorField "count"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        <div class="field"><label class="field-label" for="root-volume-size">系统盘 GB *</label><input id="root-volume-size" name="root_volume_gb" type="number" value="{{$f.Params.EC2.RootVolumeGB}}" min="8" required{{if eq .ParamErrorField "root_volume_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        <div class="field"><label class="field-label" for="key-pair-name">Key Pair</label><input id="key-pair-name" name="key_name" value="{{$f.Params.EC2.KeyName}}"></div>
+        <div class="field"><label class="field-label" for="ingress-mode">入站规则</label><select id="ingress-mode" name="ingress_mode"><option value="none"{{if not .HasIngress}} selected{{end}}>无入站规则</option><option value="rule"{{if .HasIngress}} selected{{end}}>配置一条规则</option></select></div>
+        <div class="field"><label class="field-label" for="ingress-port">入站端口</label><input id="ingress-port" name="ingress_port" type="number" value="{{.IngressPort}}"{{if eq .ParamErrorField "ingress_port"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        <div class="field"><label class="field-label" for="ingress-protocol">协议</label><select id="ingress-protocol" name="ingress_protocol"{{if eq .ParamErrorField "ingress_protocol"}} aria-invalid="true" aria-describedby="error-params"{{end}}><option value=""{{if not .HasIngress}} selected{{end}}>请选择</option><option value="tcp"{{if eq .IngressProtocol "tcp"}} selected{{end}}>tcp</option><option value="udp"{{if eq .IngressProtocol "udp"}} selected{{end}}>udp</option></select></div>
+        <div class="field"><label class="field-label" for="ingress-cidr">来源 CIDR</label><input id="ingress-cidr" name="ingress_cidr" value="{{.IngressCIDR}}"{{if eq .ParamErrorField "ingress_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+      </div>
+      {{with index .FieldErrors "params"}}<p class="field-error" id="error-params" role="alert">{{.}}</p>{{end}}
+    </fieldset>
+
+    <fieldset class="field-group disclosure" data-disclosure>
+      <legend class="field-legend"><span class="disclosure-label" data-disclosure-fallback>VPC</span><button type="button" class="disclosure-toggle" hidden aria-expanded="true" data-enhanced-expanded="{{if $f.Params.Network.Enabled}}true{{else}}false{{end}}" aria-controls="network-fields">VPC</button></legend>
+      <div id="network-fields">
+        <div class="checkbox-field"><input id="network-enabled" name="network_enabled" type="checkbox"{{if $f.Params.Network.Enabled}} checked{{end}}><label for="network-enabled">创建 Hermes VPC</label></div>
+        <div class="form-grid">
+          <div class="field"><label class="field-label" for="network-vpc-cidr">VPC CIDR</label><input id="network-vpc-cidr" name="network_vpc_cidr" value="{{$f.Params.Network.VPCCIDR}}"{{if eq .ParamErrorField "network_vpc_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="network-public-subnets">公网子网 CIDR</label><input id="network-public-subnets" name="network_public_subnet_cidrs" value="{{range $i,$v := $f.Params.Network.PublicSubnetCIDRs}}{{if $i}},{{end}}{{$v}}{{end}}"{{if eq .ParamErrorField "network_public_subnet_cidrs"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="field-group disclosure" data-disclosure>
+      <legend class="field-legend"><span class="disclosure-label" data-disclosure-fallback>MySQL</span><button type="button" class="disclosure-toggle" hidden aria-expanded="true" data-enhanced-expanded="{{if $f.Params.RDS.Enabled}}true{{else}}false{{end}}" aria-controls="rds-fields">MySQL</button></legend>
+      <div id="rds-fields">
+        <div class="checkbox-field"><input id="rds-enabled" name="rds_enabled" type="checkbox"{{if $f.Params.RDS.Enabled}} checked{{end}}><label for="rds-enabled">启用 MySQL</label></div>
+        <div class="form-grid">
+          <div class="field"><label class="field-label" for="rds-engine-version">版本</label><input id="rds-engine-version" name="rds_engine_version" value="{{$f.Params.RDS.EngineVersion}}"{{if eq .ParamErrorField "rds_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="rds-instance-class">规格</label><input id="rds-instance-class" name="rds_instance_class" value="{{$f.Params.RDS.InstanceClass}}"{{if eq .ParamErrorField "rds_instance_class"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="rds-storage">存储 GB</label><input id="rds-storage" name="rds_allocated_storage_gb" type="number" value="{{$f.Params.RDS.AllocatedStorageGB}}" min="20"{{if eq .ParamErrorField "rds_allocated_storage_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="rds-db-name">数据库名</label><input id="rds-db-name" name="rds_db_name" value="{{$f.Params.RDS.DBName}}"{{if eq .ParamErrorField "rds_db_name"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="rds-username">用户名</label><input id="rds-username" name="rds_username" value="{{$f.Params.RDS.Username}}"{{if eq .ParamErrorField "rds_username"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="field-group disclosure" data-disclosure>
+      <legend class="field-legend"><span class="disclosure-label" data-disclosure-fallback>Redis</span><button type="button" class="disclosure-toggle" hidden aria-expanded="true" data-enhanced-expanded="{{if $f.Params.Redis.Enabled}}true{{else}}false{{end}}" aria-controls="redis-fields">Redis</button></legend>
+      <div id="redis-fields">
+        <div class="form-grid checkbox-grid">
+          <div class="checkbox-field"><input id="redis-enabled" name="redis_enabled" type="checkbox" data-redis-enabled{{if $f.Params.Redis.Enabled}} checked{{end}}><label for="redis-enabled">启用 Redis</label></div>
+          <div class="checkbox-field"><input id="redis-auth-enabled" name="redis_auth_enabled" type="checkbox" data-redis-auth{{if and $f.Params.Redis.Enabled $f.Params.Redis.AuthEnabled}} checked{{end}}><label for="redis-auth-enabled">启用 AUTH</label></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label class="field-label" for="redis-engine-version">版本</label><input id="redis-engine-version" name="redis_engine_version" value="{{$f.Params.Redis.EngineVersion}}"{{if eq .ParamErrorField "redis_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="redis-node-type">规格</label><input id="redis-node-type" name="redis_node_type" value="{{$f.Params.Redis.NodeType}}"{{if eq .ParamErrorField "redis_node_type"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+          <div class="field"><label class="field-label" for="redis-node-count">节点数</label><input id="redis-node-count" name="redis_node_count" type="number" value="{{$f.Params.Redis.NodeCount}}" min="1" max="5"{{if eq .ParamErrorField "redis_node_count"}} aria-invalid="true" aria-describedby="error-params"{{end}}></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="form-actions"><button class="button-primary" data-loading-label="保存中…"{{if or (not .Projects) (not .Accounts)}} disabled aria-describedby="blueprint-prerequisites"{{end}} type="submit">{{.SubmitLabel}}</button><a class="button" href="/blueprints">取消</a></div>
   </form>
 </section>
 {{end}}

@@ -1,0 +1,18 @@
+{{define "content"}}
+<section class="page-panel" aria-labelledby="project-delete-title">
+  <a class="back-link" href="/projects">返回项目列表</a>
+  <div class="page-header"><div><h2 class="page-title" id="project-delete-title">删除项目</h2><p class="page-description">请在继续前确认目标与影响。</p></div></div>
+  {{if .Error}}
+  <div class="notice err" role="alert"><p>{{.Error}}</p></div>
+  {{else}}
+  <div class="notice err" role="alert"><p>即将永久删除项目“<span class="long-value">{{.Project.Name}}</span>”。仍有蓝图引用时，Hermes 会拒绝删除。</p></div>
+  {{end}}
+  <dl class="summary-grid">
+    <div><dt>名称</dt><dd class="long-value">{{.Project.Name}}</dd></div>
+    <div><dt>描述</dt><dd class="long-value">{{.Project.Description}}</dd></div>
+  </dl>
+  <form method="post" action="/projects/{{.Project.ID}}/delete">
+    <div class="form-actions"><button class="button-danger" type="submit" data-loading-label="删除中…">确认删除</button><a class="button" href="/projects">取消</a></div>
+  </form>
+</section>
+{{end}}

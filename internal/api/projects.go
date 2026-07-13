@@ -1,8 +1,12 @@
 package api
 
 import (
+	"bytes"
+	"context"
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -22,6 +26,14 @@ type projectFormData struct {
 	Description string
 	Error       string
 	FieldErrors map[string]string
+}
+
+type projectDeleteData struct {
+	PageTitle string
+	ActiveNav string
+	HideNav   bool
+	Project   store.Project
+	Error     string
 }
 
 func addProjectRoutes(mux *http.ServeMux, d Deps) {
@@ -66,15 +78,104 @@ func addProjectRoutes(mux *http.ServeMux, d Deps) {
 		}
 		http.Redirect(w, r, "/projects", http.StatusSeeOther)
 	})
+	mux.HandleFunc("GET /projects/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleProjectDeleteConfirmation(w, r, d)
+	})
 	mux.HandleFunc("DELETE /projects/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err := d.Store.DeleteProject(r.Context(), id); err != nil {
-			// FK RESTRICT (project still has blueprints) → inline error row
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write([]byte(`<tr><td colspan="3" class="err">无法删除:该项目下还有蓝图</td></tr>`))
+		handleDeleteProject(w, r, d, false)
+	})
+	mux.HandleFunc("POST /projects/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleDeleteProject(w, r, d, true)
+	})
+}
+
+func handleProjectDeleteConfirmation(w http.ResponseWriter, r *http.Request, d Deps) {
+	id, ok := parseDeleteID(w, r, "", "项目 ID 无效")
+	if !ok {
+		return
+	}
+	project, err := d.Store.GetProject(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
 			return
 		}
-		writeProjectRows(w, r, d)
+		log.Printf("load project %d delete confirmation: %v", id, err)
+		http.Error(w, "无法读取项目", http.StatusInternalServerError)
+		return
+	}
+	renderProjectDelete(w, d, http.StatusOK, project, "")
+}
+
+func handleDeleteProject(w http.ResponseWriter, r *http.Request, d Deps, redirect bool) {
+	event := "project-delete-error"
+	if redirect {
+		event = ""
+	}
+	id, ok := parseDeleteID(w, r, event, "项目 ID 无效")
+	if !ok {
+		return
+	}
+
+	var project store.Project
+	if redirect {
+		var err error
+		project, err = d.Store.GetProject(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.NotFound(w, r)
+				return
+			}
+			log.Printf("load project %d before delete: %v", id, err)
+			http.Error(w, "无法读取项目", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := d.Store.DeleteProject(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			writeResourceDeleteError(w, r, "project-delete-error", "项目不存在或已被删除", http.StatusNotFound)
+		case errors.Is(err, store.ErrProjectReferenced):
+			const message = "该项目仍有蓝图引用，无法删除"
+			if redirect {
+				renderProjectDelete(w, d, http.StatusConflict, project, message)
+			} else {
+				writeResourceDeleteError(w, r, "project-delete-error", message, http.StatusConflict)
+			}
+		default:
+			log.Printf("delete project %d: %v", id, err)
+			const message = "无法删除项目，请稍后重试"
+			if redirect {
+				renderProjectDelete(w, d, http.StatusInternalServerError, project, message)
+			} else {
+				writeResourceDeleteError(w, r, "project-delete-error", message, http.StatusInternalServerError)
+			}
+		}
+		return
+	}
+	if redirect {
+		http.Redirect(w, r, "/projects", http.StatusSeeOther)
+		return
+	}
+
+	body, err := renderProjectRows(r.Context(), d)
+	if err != nil {
+		log.Printf("render projects after deleting %d: %v", id, err)
+		writeResourceDeleteError(w, r, "project-delete-error", "项目已删除，但列表刷新失败，请重新加载页面", http.StatusInternalServerError)
+		return
+	}
+	writeResourceDeleteSuccess(w, r, "project-delete-success", "项目已删除")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
+func renderProjectDelete(w http.ResponseWriter, d Deps, status int, project store.Project, message string) {
+	d.Renderer.RenderStatus(w, "project_delete", status, projectDeleteData{
+		PageTitle: "删除项目 · " + project.Name,
+		ActiveNav: "projects",
+		Project:   project,
+		Error:     message,
 	})
 }
 
@@ -90,19 +191,17 @@ func validateProjectForm(form *projectFormData) {
 }
 
 func renderProjectForm(w http.ResponseWriter, d Deps, status int, data projectFormData) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	d.Renderer.Render(w, "project_form", data)
+	d.Renderer.RenderStatus(w, "project_form", status, data)
 }
 
-func writeProjectRows(w http.ResponseWriter, r *http.Request, d Deps) {
-	list, err := d.Store.ListProjects(r.Context())
+func renderProjectRows(ctx context.Context, d Deps) ([]byte, error) {
+	list, err := d.Store.ListProjects(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := d.Renderer.RenderPartial(w, "project_rows", list); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var body bytes.Buffer
+	if err := d.Renderer.RenderPartial(&body, "project_rows", list); err != nil {
+		return nil, err
 	}
+	return body.Bytes(), nil
 }

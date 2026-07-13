@@ -45,8 +45,7 @@ func NewRouter(d Deps) http.Handler {
 			http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 			return
 		}
-		w.WriteHeader(http.StatusUnauthorized)
-		d.Renderer.Render(w, "login", map[string]any{
+		d.Renderer.RenderStatus(w, "login", http.StatusUnauthorized, map[string]any{
 			"PageTitle": "登录",
 			"HideNav":   true,
 			"Error":     "口令错误",

@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -22,6 +24,10 @@ type CloudAccount struct {
 // ErrDuplicateAccount is returned by CreateCloudAccount when a cloud account
 // with the same AWS account id already exists (enforced by a unique index).
 var ErrDuplicateAccount = errors.New("a cloud account with this AWS account id already exists")
+
+// ErrCloudAccountReferenced is returned when a blueprint or environment still
+// owns the cloud account and the database refuses its deletion.
+var ErrCloudAccountReferenced = errors.New("cloud account is referenced")
 
 func (s *Store) CreateCloudAccount(ctx context.Context, a CloudAccount) (int64, error) {
 	enc, err := s.cipher.Encrypt(a.SecretAccessKey)
@@ -88,6 +94,19 @@ func (s *Store) ListCloudAccounts(ctx context.Context) ([]CloudAccount, error) {
 }
 
 func (s *Store) DeleteCloudAccount(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM cloud_accounts WHERE id = ?`, id)
-	return err
+	res, err := s.db.ExecContext(ctx, `DELETE FROM cloud_accounts WHERE id = ?`, id)
+	if err != nil {
+		if isSQLiteForeignKeyConstraint(err) {
+			return fmt.Errorf("%w: %v", ErrCloudAccountReferenced, err)
+		}
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

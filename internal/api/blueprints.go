@@ -143,6 +143,7 @@ func handleDeleteBlueprint(w http.ResponseWriter, r *http.Request, d Deps, redir
 		writeBlueprintDeleteError(w, r, "蓝图已删除，但列表刷新失败，请重新加载页面", http.StatusInternalServerError)
 		return
 	}
+	writeResourceDeleteSuccess(w, r, "blueprint-delete-success", "蓝图已删除")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(body.Bytes())
 }

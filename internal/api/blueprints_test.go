@@ -1214,6 +1214,26 @@ func TestHTMXBlueprintDeleteFailuresExposeSafeFeedbackEvents(t *testing.T) {
 	}
 }
 
+func TestHTMXBlueprintDeleteSuccessAnnouncesAfterSwap(t *testing.T) {
+	d := testDepsWithOrchestrator(t)
+	pid, aid := seedProjectAccount(t, d)
+	blueprintID, err := d.Store.CreateBlueprint(context.Background(), store.Blueprint{
+		ProjectID: pid, CloudAccountID: aid, Name: "delete-me", Params: validBPParams(),
+	})
+	if err != nil {
+		t.Fatalf("CreateBlueprint: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/blueprints/"+itoa(blueprintID), nil)
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(d.Auth.IssueCookie())
+	rec := httptest.NewRecorder()
+	NewRouter(d).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	assertAfterSwapDeleteSuccess(t, rec, "blueprint-delete-success", "蓝图已删除")
+}
+
 func TestBlueprintDeleteListLinksToNoJavaScriptConfirmation(t *testing.T) {
 	d := testDepsWithOrchestrator(t)
 	pid, aid := seedProjectAccount(t, d)
@@ -1229,6 +1249,9 @@ func TestBlueprintDeleteListLinksToNoJavaScriptConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="blueprint-feedback"`) || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, `aria-live="assertive"`) {
 		t.Fatalf("blueprint list lacks an accessible HTMX failure target: %s", body)
+	}
+	if !strings.Contains(body, `id="blueprint-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden`) {
+		t.Fatalf("blueprint list lacks an accessible HTMX success target: %s", body)
 	}
 	if !strings.Contains(body, `src="/static/ui_feedback.js"`) {
 		t.Fatalf("blueprint list does not load the safe feedback helper: %s", body)

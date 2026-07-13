@@ -6,10 +6,12 @@ colors:
   console-surface: "#ffffff"
   console-subtle: "#eef2f6"
   console-border: "#d8dee7"
+  console-border-strong: "#7f8b9b"
   console-ink: "#111827"
   console-muted: "#4b5563"
   console-primary: "#255f85"
   console-primary-strong: "#174565"
+  console-primary-soft: "#edf5fa"
   console-danger: "#b42318"
   console-danger-soft: "#fef3f2"
   console-success: "#087443"
@@ -112,12 +114,14 @@ Hermes uses a restrained Tailwind palette: a cool off-white app canvas, white wo
 ### Primary
 - **Console Primary**: A restrained steel blue used for primary buttons, focus treatment, links, and future active navigation.
 - **Console Primary Strong**: The hover and active state for primary controls.
+- **Console Primary Soft**: A pale steel-blue state surface for active jobs and other non-decorative feedback.
 
 ### Neutral
 - **Console Canvas**: The app background is a cool near-white. Keep the main work surface light and quiet.
-- **Console Surface**: Panels, tables, and grouped controls sit on white.
+- **Console Surface**: Tables and controls use white; grouped form sections stay flat on the canvas with quiet dividers.
 - **Console Subtle**: Header rows, status strips, and hover fills use a low-contrast neutral layer.
 - **Console Border**: Borders are the main depth mechanism for tables, inputs, panels, and field groups.
+- **Console Border Strong**: Form controls and interactive container edges use this boundary color. It measures at least 3:1 against Console Surface, Canvas, and Subtle; quiet structural dividers keep Console Border.
 - **Console Ink**: Primary text for body copy, table values, labels, and headings.
 - **Console Muted**: Secondary stack names, empty states, metadata, and operational notes.
 - **Console Log**: The log panel uses a dark navy surface with light text. Keep logs visually distinct from forms and tables.

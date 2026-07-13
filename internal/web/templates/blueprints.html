@@ -1,8 +1,9 @@
 {{define "content"}}
-<section class="page-panel">
-  <div class="page-header"><div><h2 class="page-title">蓝图</h2><p class="page-description">可复用的环境规格。编辑不会改变已有环境快照。</p></div><a class="button-primary" href="/blueprints/new">新建蓝图</a></div>
+<section class="page-panel" aria-labelledby="blueprints-title">
+  <div class="page-header"><div><h2 class="page-title" id="blueprints-title">蓝图</h2><p class="page-description">可复用的环境规格。编辑不会改变已有环境快照。</p></div><a class="button-primary" href="/blueprints/new">新建蓝图</a></div>
   {{if .Error}}<p class="notice err" role="alert">{{.Error}}</p>{{end}}
   <div class="notice err" id="blueprint-feedback" role="alert" aria-live="assertive" hidden></div>
-  <div class="table-wrap"><table class="data-table"><thead><tr><th>名称</th><th>Region</th><th>规格×数量</th><th>操作</th></tr></thead><tbody id="blueprint-rows">{{template "blueprint_rows" .Blueprints}}</tbody></table></div>
+  <div id="blueprint-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden></div>
+  <div class="table-wrap responsive-table-wrap"><table class="data-table responsive-table"><caption class="sr-only">可部署蓝图列表</caption><thead><tr><th scope="col">名称</th><th scope="col">Region</th><th scope="col">规格×数量</th><th scope="col">操作</th></tr></thead><tbody id="blueprint-rows">{{template "blueprint_rows" .Blueprints}}</tbody></table></div>
 </section>
 {{end}}

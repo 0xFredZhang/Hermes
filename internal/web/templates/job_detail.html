@@ -13,8 +13,8 @@
     <h3 class="section-title" id="job-metadata-title">任务信息</h3>
     <dl class="summary-grid diagnostic-grid">
       <div><dt>环境</dt><dd><a href="/environments/{{.Environment.ID}}">{{.Environment.Name}}</a></dd></div>
-      <div><dt>操作</dt><dd>{{.Job.ActionLabel}} <code class="raw-value">{{.Job.Action}}</code></dd></div>
-      <div><dt>状态</dt><dd>{{.Job.StatusLabel}} <code class="raw-value">{{.Job.Status}}</code></dd></div>
+      <div><dt>操作</dt><dd>{{.Job.ActionLabel}} <code class="raw-value long-value">{{.Job.Action}}</code></dd></div>
+      <div><dt>状态</dt><dd>{{.Job.StatusLabel}} <code class="raw-value long-value">{{.Job.Status}}</code></dd></div>
       <div><dt>排队时间</dt><dd>{{.Job.QueuedAt}}</dd></div>
       <div><dt>开始时间</dt><dd>{{.Job.StartedAt}}</dd></div>
       <div><dt>结束时间</dt><dd>{{.Job.FinishedAt}}</dd></div>
@@ -43,7 +43,7 @@
         {{if .Job.Active}}<p class="section-meta">任务仍在执行；这里只显示当前持久化日志。</p>{{else}}<p class="section-meta">任务完成时持久化的日志快照。</p>{{end}}
       </div>
       <div class="copy-log-actions">
-        <button type="button" hidden data-copy-log data-copy-target="job-log" aria-controls="job-log">复制日志</button>
+        <button type="button" hidden data-copy-log data-copy-target="job-log" data-loading-label="复制中…" aria-controls="job-log">复制日志</button>
         <span class="copy-log-status" data-copy-status role="status" aria-live="polite"></span>
       </div>
     </div>

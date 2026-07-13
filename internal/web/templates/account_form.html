@@ -13,18 +13,18 @@
       <label class="field-label" for="account-name">账号别名</label>
       <input id="account-name" name="name" value="{{.Name}}" maxlength="128" autocomplete="off" required{{with index .FieldErrors "name"}} aria-invalid="true" aria-describedby="account-name-error"{{end}}>
       <p class="field-hint">使用容易辨认的本地名称，例如 prod-main。</p>
-      {{with index .FieldErrors "name"}}<p class="field-error" id="account-name-error">{{.}}</p>{{end}}
+      {{with index .FieldErrors "name"}}<p class="field-error" id="account-name-error" role="alert">{{.}}</p>{{end}}
     </div>
     <div class="field-block">
       <label class="field-label" for="default-region">默认区域</label>
       <input id="default-region" name="default_region" value="{{.DefaultRegion}}" maxlength="64" autocomplete="off" placeholder="ap-southeast-1" required{{with index .FieldErrors "default_region"}} aria-invalid="true" aria-describedby="default-region-error"{{end}}>
       <p class="field-hint">新建蓝图时优先使用此区域，之后仍可调整。</p>
-      {{with index .FieldErrors "default_region"}}<p class="field-error" id="default-region-error">{{.}}</p>{{end}}
+      {{with index .FieldErrors "default_region"}}<p class="field-error" id="default-region-error" role="alert">{{.}}</p>{{end}}
     </div>
     <div class="field-block">
       <label class="field-label" for="access-key-id">Access Key ID</label>
       <input id="access-key-id" name="access_key_id" value="{{.AccessKeyID}}" maxlength="128" autocomplete="off" spellcheck="false" required{{with index .FieldErrors "access_key_id"}} aria-invalid="true" aria-describedby="access-key-id-error"{{end}}>
-      {{with index .FieldErrors "access_key_id"}}<p class="field-error" id="access-key-id-error">{{.}}</p>{{end}}
+      {{with index .FieldErrors "access_key_id"}}<p class="field-error" id="access-key-id-error" role="alert">{{.}}</p>{{end}}
     </div>
     <div class="field-block">
       <label class="field-label" for="secret-access-key">Secret Access Key</label>
@@ -33,10 +33,10 @@
         <button class="button-muted password-toggle" type="button" data-password-toggle aria-controls="secret-access-key" aria-pressed="false">显示</button>
       </div>
       <p class="field-hint">提交失败后不会回显此值。</p>
-      {{with index .FieldErrors "secret_access_key"}}<p class="field-error" id="secret-access-key-error">{{.}}</p>{{end}}
+      {{with index .FieldErrors "secret_access_key"}}<p class="field-error" id="secret-access-key-error" role="alert">{{.}}</p>{{end}}
     </div>
     <div class="form-actions">
-      <button class="button-primary" type="submit">验证并保存</button>
+      <button class="button-primary" type="submit" data-loading-label="验证中…">验证并保存</button>
       <a class="button" href="/accounts">取消</a>
     </div>
   </form>

@@ -1,29 +1,29 @@
 {{define "project_rows"}}
 {{range .}}
 <tr>
-  <td data-label="名称">{{.Name}}</td><td data-label="描述">{{.Description}}</td>
-  <td data-label="操作"><button class="button-danger" type="button" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除项目“{{.Name}}”？">删除</button></td>
+  <td data-label="名称" class="long-value">{{.Name}}</td><td data-label="描述" class="long-value">{{.Description}}</td>
+  <td data-label="操作"><a class="button button-danger" href="/projects/{{.ID}}/delete" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除项目“{{.Name}}”？" data-loading-label="删除中…">删除</a></td>
 </tr>
 {{else}}
-<tr><td colspan="3" class="empty-row">暂无项目。<a href="/projects/new">新建项目</a>后即可组织蓝图。</td></tr>
+<tr><td colspan="3" class="empty-row">暂无项目。确认已添加<a href="/accounts">AWS 云账号</a>，再<a href="/projects/new">新建项目</a>并继续创建蓝图。</td></tr>
 {{end}}
 {{end}}
 
 {{define "blueprint_rows"}}
 {{range .}}
 <tr>
-  <td><a href="/blueprints/{{.ID}}">{{.Name}}</a></td><td>{{.Params.Region}}</td><td>{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
-  <td>
+  <td data-label="名称" class="long-value"><a class="long-value" href="/blueprints/{{.ID}}">{{.Name}}</a></td><td data-label="Region" class="long-value">{{.Params.Region}}</td><td data-label="规格×数量" class="long-value">{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
+  <td data-label="操作">
     <div class="action-group">
       <a class="button" href="/blueprints/{{.ID}}/edit">编辑</a>
       <a class="button" href="/blueprints/{{.ID}}/duplicate">复制</a>
       <a class="button-primary" href="/blueprints/{{.ID}}/deploy">部署</a>
-      <a class="button button-danger" href="/blueprints/{{.ID}}/delete" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除蓝图“{{.Name}}”？">删除</a>
+      <a class="button button-danger" href="/blueprints/{{.ID}}/delete" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除蓝图“{{.Name}}”？" data-loading-label="删除中…">删除</a>
     </div>
   </td>
 </tr>
 {{else}}
-<tr><td colspan="4" class="empty-row">暂无蓝图。<a href="/blueprints/new">新建蓝图</a>后即可部署。</td></tr>
+<tr><td colspan="4" class="empty-row">暂无蓝图。确认<a href="/accounts">账号</a>与<a href="/projects">项目</a>已准备好，再<a href="/blueprints/new">新建蓝图</a>。</td></tr>
 {{end}}
 {{end}}
 
@@ -58,30 +58,45 @@
     </dl>
   </td>
   <td data-label="结果">
-    {{if .Summary}}<p class="job-summary">{{.Summary}}</p>{{end}}
-    {{if .ErrorExcerpt}}<p class="job-error">{{.ErrorExcerpt}}</p>{{end}}
+    {{if .Summary}}<p class="job-summary long-value">{{.Summary}}</p>{{end}}
+    {{if .ErrorExcerpt}}<p class="job-error long-value">{{.ErrorExcerpt}}</p>{{end}}
     {{if and (not .Summary) (not .ErrorExcerpt)}}<span class="muted">暂无摘要</span>{{end}}
   </td>
-  <td data-label="详情"><a class="button" href="/jobs/{{.ID}}" aria-label="查看 Job #{{.ID}} 详情">查看</a></td>
+  <td data-label="详情"><a id="job-detail-{{.ID}}" class="button" href="/jobs/{{.ID}}" aria-label="查看 Job #{{.ID}} 详情">查看</a></td>
 </tr>
 {{else}}
 <tr><td colspan="6" class="empty-row">尚无任务记录。部署或执行环境操作后，历史会显示在这里。</td></tr>
 {{end}}
 {{end}}
 
+{{define "environment_status_badge"}}
+{{if eq . "pending"}}<span class="status-badge status-neutral">待预演</span>
+{{else if eq . "previewing"}}<span class="status-badge status-active">预演中</span>
+{{else if eq . "preview_ready"}}<span class="status-badge status-warning">预演就绪</span>
+{{else if eq . "provisioning"}}<span class="status-badge status-active">创建中</span>
+{{else if eq . "up"}}<span class="status-badge status-success">运行中</span>
+{{else if eq . "refreshing"}}<span class="status-badge status-active">漂移检测中</span>
+{{else if eq . "destroy_previewing"}}<span class="status-badge status-warning">销毁预演中</span>
+{{else if eq . "destroy_preview_ready"}}<span class="status-badge status-warning">待确认销毁</span>
+{{else if eq . "destroying"}}<span class="status-badge status-active">销毁中</span>
+{{else if eq . "failed"}}<span class="status-badge status-danger">失败</span>
+{{else if eq . "destroyed"}}<span class="status-badge status-neutral">已销毁</span>
+{{else}}<span class="status-badge status-neutral long-value">{{.}}</span>{{end}}
+{{end}}
+
 {{define "env_status"}}
-<div id="status" hx-get="/environments/{{.Env.ID}}/status"{{if .StatusPolling}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML">
-  <p class="status-line">状态:<strong class="status-value">{{.Env.Status}}</strong></p>
+<div id="status" hx-get="/environments/{{.Env.ID}}/status"{{if .StatusPolling}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML" role="region" aria-label="环境状态" aria-live="polite">
+  <div class="status-line"><span>状态</span>{{template "environment_status_badge" .Env.Status}}</div>
   {{if eq .Env.Status "pending"}}
     <p class="notice err">初始预演尚未启动</p>
     <div class="action-group">
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/preview"><button class="button-primary">重试预演</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/preview"><button class="button-primary" data-loading-label="启动中…">重试预演</button></form>
     </div>
   {{else if eq .Env.Status "preview_ready"}}
     <p class="notice ok">预演:{{.Plan}}</p>
     <div class="action-group">
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/up"><button class="button-primary">确认创建</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/up"><button class="button-primary" data-loading-label="创建中…">确认创建</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger" data-loading-label="预演中…">预演销毁</button></form>
     </div>
   {{else if eq .Env.Status "up"}}
     <p class="notice ok">已就绪</p>
@@ -109,7 +124,7 @@
         {{if .RDSUsername}}<p class="output-line">用户名:{{.RDSUsername}}</p>{{end}}
         {{if .HasRDSSecret}}
           <div id="rds-credentials-{{.Env.ID}}"></div>
-          <button type="button" hx-post="/environments/{{.Env.ID}}/rds-credentials" hx-target="#rds-credentials-{{.Env.ID}}" hx-swap="innerHTML">显示凭据</button>
+          <button type="button" hx-post="/environments/{{.Env.ID}}/rds-credentials" hx-target="#rds-credentials-{{.Env.ID}}" hx-swap="innerHTML" data-loading-label="读取中…">显示凭据</button>
         {{end}}
       </section>
     {{end}}
@@ -121,29 +136,29 @@
         {{if .RedisPort}}<p class="output-line">端口:{{.RedisPort}}</p>{{end}}
         {{if .HasRedisSecret}}
           <div id="redis-credentials-{{.Env.ID}}"></div>
-          <button type="button" hx-post="/environments/{{.Env.ID}}/redis-credentials" hx-target="#redis-credentials-{{.Env.ID}}" hx-swap="innerHTML">显示凭据</button>
+          <button type="button" hx-post="/environments/{{.Env.ID}}/redis-credentials" hx-target="#redis-credentials-{{.Env.ID}}" hx-swap="innerHTML" data-loading-label="读取中…">显示凭据</button>
         {{end}}
       </section>
     {{end}}
     </div>
     {{if .RefreshPlan}}<p class="status-line">最近漂移检测:{{.RefreshPlan}}</p>{{end}}
     <div class="action-group">
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/refresh"><button>检测漂移</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/refresh"><button data-loading-label="检测中…">检测漂移</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger" data-loading-label="预演中…">预演销毁</button></form>
     </div>
   {{else if eq .Env.Status "refreshing"}}
     <p class="status-line">正在检测漂移</p>
   {{else if eq .Env.Status "destroy_preview_ready"}}
     <p class="notice ok">销毁预演:{{.DestroyPlan}}</p>
     <div class="action-group">
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy"><button class="button-danger">确认销毁</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/cancel-destroy"><button>保留资源</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy" data-confirm="确认销毁环境“{{.Env.Name}}”及其 AWS 资源？"><button class="button-danger" data-loading-label="销毁中…">确认销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/cancel-destroy"><button data-loading-label="保留中…">保留资源</button></form>
     </div>
   {{else if eq .Env.Status "failed"}}
     <p class="notice err">失败</p>
     <div class="action-group">
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/retry"><button class="button-primary">重试</button></form>
-      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger">预演销毁</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/retry"><button class="button-primary" data-loading-label="重试中…">重试</button></form>
+      <form class="inline-form" method="post" action="/environments/{{.Env.ID}}/destroy-preview"><button class="button-danger" data-loading-label="预演中…">预演销毁</button></form>
     </div>
   {{else if eq .Env.Status "destroyed"}}
     <p class="status-line">已销毁</p>
