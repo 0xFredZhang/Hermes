@@ -1239,9 +1239,18 @@ func TestBlueprintDeleteListLinksToNoJavaScriptConfirmation(t *testing.T) {
 	pid, aid := seedProjectAccount(t, d)
 	bpID, _ := d.Store.CreateBlueprint(context.Background(), store.Blueprint{ProjectID: pid, CloudAccountID: aid, Name: "delete-me", Params: validBPParams()})
 	body := authedGet(t, d, "/blueprints").Body.String()
-	for _, want := range []string{`class="button button-danger"`, `href="/blueprints/` + itoa(bpID) + `/delete"`, `hx-delete="/blueprints/` + itoa(bpID) + `"`, `hx-confirm=`} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("delete fallback missing %q: %s", want, body)
+	deleteHref := `/blueprints/` + itoa(bpID) + `/delete`
+	deleteLink := requireHTMLTagClassTokens(t, body, `href="`+deleteHref+`"`, "btn", "btn-outline-danger")
+	for _, want := range []string{
+		`href="` + deleteHref + `"`,
+		`hx-delete="/blueprints/` + itoa(bpID) + `"`,
+		`hx-target="#blueprint-rows"`,
+		`hx-swap="innerHTML"`,
+		`hx-confirm="删除蓝图“delete-me”？"`,
+		`data-loading-label="删除中…"`,
+	} {
+		if !strings.Contains(deleteLink, want) {
+			t.Fatalf("delete fallback link missing %q: %s", want, deleteLink)
 		}
 	}
 	if strings.Contains(body, `action="/blueprints/`+itoa(bpID)+`/delete"`) {

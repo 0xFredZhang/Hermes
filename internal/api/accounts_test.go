@@ -78,16 +78,42 @@ func TestAccountListContainsDataButNoCreateForm(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"prod-main", "210987654321", `href="/accounts/new"`, `class="table-wrap responsive-table-wrap"`, `class="data-table responsive-table"`} {
+	for _, want := range []string{"prod-main", "210987654321", `href="/accounts/new"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("account list missing %q", want)
 		}
 	}
+	requireHTMLTagClassTokens(t, body, "responsive-table-wrap", "table-responsive", "responsive-table-wrap")
+	requireHTMLTagClassTokens(t, body, "table class=", "table", "table-vcenter", "card-table", "responsive-table")
 	for _, forbidden := range []string{`name="secret_access_key"`, `name="default_region"`, `action="/accounts"`} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("account list unexpectedly contains create control %q", forbidden)
 		}
 	}
+}
+
+func requireHTMLTagClassTokens(t *testing.T, body, marker string, required ...string) string {
+	t.Helper()
+	tag := htmlTagContaining(t, body, marker)
+	classAt := strings.Index(tag, `class="`)
+	if classAt == -1 {
+		t.Fatalf("tag containing %q has no class attribute: %s", marker, tag)
+	}
+	classValue := tag[classAt+len(`class="`):]
+	classEnd := strings.Index(classValue, `"`)
+	if classEnd == -1 {
+		t.Fatalf("tag containing %q has an unterminated class attribute: %s", marker, tag)
+	}
+	classes := make(map[string]struct{})
+	for _, className := range strings.Fields(classValue[:classEnd]) {
+		classes[className] = struct{}{}
+	}
+	for _, requiredClass := range required {
+		if _, ok := classes[requiredClass]; !ok {
+			t.Errorf("tag containing %q is missing class token %q: %s", marker, requiredClass, tag)
+		}
+	}
+	return tag
 }
 
 func TestNewAccountPageRendersDedicatedForm(t *testing.T) {

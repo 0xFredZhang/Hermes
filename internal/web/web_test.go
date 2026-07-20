@@ -811,8 +811,18 @@ func TestStatusBadgePaletteMeetsWCAGAA(t *testing.T) {
 		{tone: "neutral", foreground: "console-muted", background: "console-subtle"},
 		{tone: "warning", foreground: "console-warning", background: "console-warning-soft"},
 	} {
-		if !strings.Contains(css, `.badge.status-`+tc.tone+`{`) {
-			t.Errorf("generated stylesheet is missing the unified badge selector for %s", tc.tone)
+		rulePattern := regexp.MustCompile(`\.badge\.status-` + regexp.QuoteMeta(tc.tone) + `\{([^}]*)\}`)
+		ruleMatch := rulePattern.FindStringSubmatch(css)
+		if len(ruleMatch) != 2 {
+			t.Fatalf("generated stylesheet is missing the unified badge selector for %s", tc.tone)
+		}
+		for _, want := range []string{
+			`color:var(--color-` + tc.foreground + `)`,
+			`background-color:var(--color-` + tc.background + `)`,
+		} {
+			if !strings.Contains(ruleMatch[1], want) {
+				t.Errorf("%s badge rule does not reference %q: %s", tc.tone, want, ruleMatch[0])
+			}
 		}
 		foreground := cssHexToken(t, css, tc.foreground)
 		background := cssHexToken(t, css, tc.background)

@@ -32,11 +32,13 @@ func TestProjectListContainsDataButNoCreateForm(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"web", "public API", `href="/projects/new"`, `class="table-wrap responsive-table-wrap"`, `class="data-table responsive-table"`} {
+	for _, want := range []string{"web", "public API", `href="/projects/new"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("project list missing %q", want)
 		}
 	}
+	requireHTMLTagClassTokens(t, body, "responsive-table-wrap", "table-responsive", "responsive-table-wrap")
+	requireHTMLTagClassTokens(t, body, "table class=", "table", "table-vcenter", "card-table", "responsive-table")
 	for _, forbidden := range []string{`name="description"`, `action="/projects"`} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("project list unexpectedly contains create control %q", forbidden)
