@@ -94,9 +94,9 @@ components:
 
 **Creative North Star: "The Calm Control Room"**
 
-Hermes should feel like a compact operations console for real AWS resources: quiet, legible, and direct. The implementation remains deliberately lightweight - Go templates, htmx, server-rendered tables and forms, and a Tailwind-compiled stylesheet - so the design system strengthens the product shape without replacing it with a heavy application framework.
+Hermes should feel like a compact operations console for real AWS resources: quiet, legible, and direct. The implementation remains deliberately lightweight: Go templates and htmx render Tabler components on the server, while a Tailwind-compiled override layer supplies Hermes tokens and the few responsive behaviors Tabler does not provide.
 
-The visual direction is restrained product UI. It preserves fast scanning for accounts, projects, blueprints, environments, previews, and logs. Tailwind provides consistent primitives, clearer hierarchy, focus states, and safer destructive-action affordances while keeping the page simple enough to remain a self-hosted tool.
+The visual direction is restrained product UI. It preserves fast scanning for accounts, projects, blueprints, environments, previews, and logs. `@tabler/core` and Tabler Icons provide the shared shell and component vocabulary; both are bundled into embedded local assets so the self-hosted console has no runtime CDN dependency.
 
 This system rejects the PRODUCT.md anti-references by name: marketing-style SaaS pages, oversized hero sections, decorative gradients, playful illustrations, ornamental dashboards, terminal-only aesthetics, AWS-console-level density, and anything that looks experimental while creating or destroying cloud resources.
 
@@ -109,7 +109,7 @@ This system rejects the PRODUCT.md anti-references by name: marketing-style SaaS
 
 ## 2. Colors
 
-Hermes uses a restrained Tailwind palette: a cool off-white app canvas, white work panels, low-contrast dividers, one steel-blue primary accent, and semantic red/green states. The palette should stay operational rather than decorative.
+Hermes applies a restrained token layer over Tabler: a cool off-white app canvas, white work panels, low-contrast dividers, one steel-blue primary accent, and semantic status colors. The palette stays operational rather than decorative.
 
 ### Primary
 - **Console Primary**: A restrained steel blue used for primary buttons, focus treatment, links, and future active navigation.
@@ -135,7 +135,7 @@ Hermes uses a restrained Tailwind palette: a cool off-white app canvas, white wo
 ### Named Rules
 **The Semantic Scarcity Rule.** Red and green are reserved for actual state, never for decoration or brand flourish.
 
-**The One Accent Future Rule.** When Tailwind is introduced, add one restrained primary accent for primary actions and active navigation; keep it under 10% of any screen.
+**The One Accent Rule.** The steel-blue primary is used for primary actions, focus, links, and active navigation; keep it under 10% of any screen.
 
 ## 3. Typography
 
@@ -159,7 +159,7 @@ Hermes uses a restrained Tailwind palette: a cool off-white app canvas, white wo
 
 ## 4. Elevation
 
-Hermes is flat today. There are no shadows in the current templates; depth comes from table borders, whitespace, fieldsets, and the dark log panel. Keep this direction. If shadows are added later, they should be structural and subtle, never decorative.
+Hermes is flat by default. Tabler cards frame a single workflow, resource table, or operational readout; depth otherwise comes from borders, whitespace, fieldsets, and the dark log panel. Shadows stay structural and subtle, never decorative.
 
 ### Named Rules
 **The Flat-By-Default Rule.** Surfaces are flat at rest. Use borders, spacing, and tonal layers before shadows.
@@ -168,7 +168,9 @@ Hermes is flat today. There are no shadows in the current templates; depth comes
 
 ## 5. Components
 
-Hermes has Tailwind-backed semantic HTML primitives rather than a JavaScript component library. The component system stabilizes these primitives first: top navigation, buttons, inputs/selects, fieldsets, tables, status text, empty states, and logs.
+Hermes uses Tabler as its component foundation: vertical navigation, cards, buttons, forms, validation, tables, datagrids, alerts, badges, and iconography share one vocabulary. The Hermes override layer owns brand tokens, stacked mobile tables, long-value wrapping, bounded logs, native confirmation, loading feedback, and AA-safe status tones.
+
+Generated assets are committed and embedded for offline use. `npm run css:build` imports the Tailwind theme plus Tabler CSS and icons, expands `@apply` only into scoped Hermes selectors, copies Tabler JavaScript, and synchronizes only the icon fonts referenced by the stylesheet. It does not scan templates to emit a standalone Tailwind utility layer because classes such as `container`, `table`, and `w-100` belong to Tabler. Application behavior continues to bind through stable IDs, `data-*` attributes, `hx-*` attributes, and the `.disclosure-toggle` enhancement hook rather than presentation classes.
 
 ### Buttons
 - **Shape:** Gently squared controls with a small radius (6px).
@@ -189,9 +191,9 @@ Hermes has Tailwind-backed semantic HTML primitives rather than a JavaScript com
 - **Actions:** Row actions should be right-aligned and clearly grouped.
 
 ### Navigation
-- **Style:** Current navigation is a simple horizontal list with a floating logout button.
-- **Active State:** Future navigation needs an active route treatment so users know whether they are managing accounts, projects, blueprints, or environments.
-- **Mobile:** Collapse structurally if needed; do not rely on shrinking type.
+- **Style:** Desktop uses a compact Tabler vertical sidebar plus a quiet top bar. Navigation remains limited to accounts, projects, blueprints, and environments.
+- **Active State:** The current destination uses both Tabler's active treatment and `aria-current="page"`.
+- **Mobile:** The sidebar collapses behind one labelled icon button. It expands structurally through Tabler's local JavaScript; type does not shrink.
 
 ### Status Text
 - **Success:** Use the success color only for ready, preview-ready, or confirmed safe states.
@@ -207,7 +209,8 @@ Hermes has Tailwind-backed semantic HTML primitives rather than a JavaScript com
 
 ### Do:
 - **Do** preserve the self-hosted, lightweight feel: Go templates, htmx flows, and server-rendered forms should remain first-class.
-- **Do** use restrained neutral surfaces, clear dividers, and one future primary accent for primary actions and active navigation.
+- **Do** use Tabler component classes first and keep Hermes CSS for product-specific behavior or accessibility fixes.
+- **Do** use restrained neutral surfaces, clear dividers, and one primary accent for primary actions and active navigation.
 - **Do** make risky actions explicit: preview, confirm create, destroy preview, confirm destroy, retry, and drift detection need distinct copy and visual hierarchy.
 - **Do** give every interactive primitive hover, active, disabled, and visible focus states.
 - **Do** keep empty states useful: point users toward adding an account, creating a project, saving a blueprint, or deploying an environment.

@@ -105,6 +105,54 @@ func TestTablerSidebarCollapseVisibilityIsSafe(t *testing.T) {
 	}
 }
 
+func TestTailwindBuildPreservesTablerUtilityClasses(t *testing.T) {
+	sourceBytes, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read source stylesheet: %v", err)
+	}
+	source := string(sourceBytes)
+	if strings.Contains(source, `tailwindcss/utilities.css`) {
+		t.Error("source stylesheet imports Tailwind's utility layer after Tabler")
+	}
+	if regexp.MustCompile(`(?m)^@source\b`).MatchString(source) {
+		t.Error("source stylesheet scans templates even though Hermes utilities are expanded through @apply")
+	}
+
+	generated := readStaticSource(t, "app.css")
+	for name, expected := range map[string]string{
+		"width":        `.w-100{width:100%!important}`,
+		"table":        `.table,.markdown>table{`,
+		"border":       `.border{border:var(--tblr-border-width) var(--tblr-border-style) var(--tblr-border-color-translucent)!important}`,
+		"radius":       `.rounded{border-radius:var(--tblr-border-radius)!important}`,
+		"start margin": `.ms-auto{margin-left:auto!important}`,
+		"spacing":      `.mb-4{margin-bottom:1.5rem!important}`,
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Errorf("generated stylesheet is missing Tabler's %s utility: %s", name, expected)
+		}
+	}
+	for name, unwanted := range map[string]string{
+		"width":        `.w-100{width:calc(var(--spacing) * 100)}`,
+		"table":        `.table{display:table}`,
+		"border":       `.border{border-style:var(--tw-border-style);border-width:1px}`,
+		"radius":       `.rounded{border-radius:.25rem}`,
+		"start margin": `.ms-auto{margin-inline-start:auto}`,
+		"spacing":      `.mb-4{margin-bottom:calc(var(--spacing) * 4)}`,
+	} {
+		if strings.Contains(generated, unwanted) {
+			t.Errorf("generated Tailwind %s utility redefines Tabler: %s", name, unwanted)
+		}
+	}
+
+	tightStart := strings.Index(generated, `.container-tight{`)
+	if tightStart == -1 {
+		t.Fatal("generated stylesheet is missing Tabler's container-tight rule")
+	}
+	if regexp.MustCompile(`\.container\{max-width:`).MatchString(generated[tightStart:]) {
+		t.Error("a later Tailwind container rule overrides the 30rem Tabler login container")
+	}
+}
+
 func TestPagePanelsPreserveTablerCardBackground(t *testing.T) {
 	sourceBytes, err := os.ReadFile("assets/app.css")
 	if err != nil {
