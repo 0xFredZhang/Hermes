@@ -153,6 +153,39 @@ func TestTailwindBuildPreservesTablerUtilityClasses(t *testing.T) {
 	}
 }
 
+func TestScreenReaderOnlyCaptionsStaySemanticAndVisuallyHidden(t *testing.T) {
+	css := readStaticSource(t, "app.css")
+	rule := regexp.MustCompile(`\.sr-only\{([^}]*)\}`).FindStringSubmatch(css)
+	if len(rule) != 2 {
+		t.Error("generated stylesheet is missing the Hermes sr-only compatibility rule")
+	} else {
+		for _, want := range []string{
+			`position:absolute`,
+			`width:1px`,
+			`height:1px`,
+			`padding:0`,
+			`overflow:hidden`,
+			`clip:rect(0, 0, 0, 0)`,
+			`clip-path:inset(50%)`,
+			`white-space:nowrap`,
+			`border:0`,
+		} {
+			if !strings.Contains(rule[1], want) {
+				t.Errorf("generated sr-only rule is missing %q: %s", want, rule[0])
+			}
+		}
+	}
+
+	captionPattern := regexp.MustCompile(`<caption class="sr-only">[^<]+</caption>`)
+	for _, name := range []string{"accounts.html", "projects.html", "blueprints.html", "environments.html", "_fragments.html"} {
+		source := readTemplateSource(t, name)
+		tableCount := strings.Count(source, "<table")
+		if got := len(captionPattern.FindAllString(source, -1)); got != tableCount {
+			t.Errorf("%s semantic sr-only captions = %d, want one non-empty caption for each of %d tables", name, got, tableCount)
+		}
+	}
+}
+
 func TestPagePanelsPreserveTablerCardBackground(t *testing.T) {
 	sourceBytes, err := os.ReadFile("assets/app.css")
 	if err != nil {
