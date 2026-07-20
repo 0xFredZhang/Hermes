@@ -38,21 +38,40 @@ func TestRendererDoesNotWritePartialSuccessOnTemplateError(t *testing.T) {
 	}
 }
 
-func TestStaticAppCSSIsEmbedded(t *testing.T) {
+func TestTablerAssetsAreEmbedded(t *testing.T) {
 	css, err := StaticFS.ReadFile("static/app.css")
 	if err != nil {
 		t.Fatalf("static app stylesheet must be embedded: %v", err)
 	}
 	for _, want := range []string{
-		"tailwindcss", ".app-shell", ".skip-link", ".form-surface", ".password-control",
-		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`,
+		"--tblr-", ".navbar-vertical", ".app-shell", ".skip-link", ".form-surface", ".password-control",
+		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`, `:focus-visible`,
 		`@media (max-width:39.999rem){.responsive-table-wrap{border:0`,
+		`@media (prefers-reduced-motion:reduce)`, `button[data-loading-label][aria-busy=true]:after`,
 		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
-		`.job-history-wrap`, `.status-badge`, `.diagnostic-grid`, `.log-panel-full`, `.copy-log-status`,
+		`.job-history-wrap`, `.status-badge`, `.diagnostic-grid`, `.log-panel{max-height:420px`, `.log-panel-full{max-height:70vh`, `.copy-log-status`,
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
 		}
+	}
+
+	js, err := StaticFS.ReadFile("static/tabler.min.js")
+	if err != nil {
+		t.Fatalf("static Tabler script must be embedded: %v", err)
+	}
+	for _, want := range []string{"Collapse", "data-bs-toggle"} {
+		if !strings.Contains(string(js), want) {
+			t.Fatalf("static Tabler script missing collapse implementation marker %q", want)
+		}
+	}
+
+	font, err := StaticFS.ReadFile("static/fonts/tabler-icons.woff2")
+	if err != nil {
+		t.Fatalf("static Tabler icon font must be embedded: %v", err)
+	}
+	if len(font) == 0 {
+		t.Fatal("static Tabler icon font must not be empty")
 	}
 }
 

@@ -2,11 +2,14 @@
   "name": "hermes-console",
   "private": true,
   "scripts": {
-    "css:build": "tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --minify",
-    "css:watch": "tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --watch",
+    "assets:vendor": "node scripts/sync-tabler-assets.mjs",
+    "css:build": "npm run assets:vendor && tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --minify",
+    "css:watch": "npm run assets:vendor && tailwindcss -i internal/web/assets/app.css -o internal/web/static/app.css --watch",
     "js:test": "node --test internal/web/assets/*.test.js"
   },
   "devDependencies": {
+    "@tabler/core": "^1.4.0",
+    "@tabler/icons-webfont": "^3.45.0",
     "@tailwindcss/cli": "^4.3.2",
     "tailwindcss": "^4.3.2"
   }

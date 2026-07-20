@@ -1,4 +1,8 @@
-@import "tailwindcss" source(none);
+@layer theme, tabler, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "@tabler/core/dist/css/tabler.css" layer(tabler);
+@import "@tabler/icons-webfont/dist/tabler-icons.css" layer(tabler);
+@import "tailwindcss/utilities.css" layer(utilities);
 
 @source "../templates/*.html";
 
