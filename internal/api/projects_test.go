@@ -138,9 +138,10 @@ func TestProjectDescriptionErrorIsAssociatedWithTextarea(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
+		`class="form-control is-invalid"`,
 		`aria-invalid="true"`,
-		`aria-describedby="project-description-error"`,
-		`id="project-description-error"`,
+		`aria-describedby="project-description-hint project-description-error"`,
+		`class="invalid-feedback" id="project-description-error" role="alert"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("description validation response missing %q", want)
@@ -153,7 +154,8 @@ func TestProjectDescriptionErrorIsAssociatedWithTextarea(t *testing.T) {
 	}
 	body = rec.Body.String()
 	for _, forbidden := range []string{
-		`aria-describedby="project-description-error"`,
+		`is-invalid`,
+		`aria-invalid="true"`,
 		`id="project-description-error"`,
 	} {
 		if strings.Contains(body, forbidden) {

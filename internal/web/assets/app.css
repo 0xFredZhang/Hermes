@@ -496,6 +496,185 @@
     @apply mt-1 break-words text-sm text-console-ink;
   }
 
+  .workflow-card {
+    width: 100%;
+    max-width: 64rem;
+    border-color: var(--color-console-border);
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  .form-workflow-card,
+  .blueprint-deploy-card {
+    max-width: 48rem;
+  }
+
+  .danger-zone {
+    max-width: 56rem;
+  }
+
+  .workflow-card-header {
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .workflow-card-header > .min-w-0 {
+    flex: 1 1 auto;
+  }
+
+  .workflow-card .back-link {
+    margin-bottom: 0.5rem;
+  }
+
+  .workflow-card .card-title,
+  .workflow-card .card-subtitle {
+    margin-inline: 0;
+  }
+
+  .workflow-card .card-actions {
+    flex: 0 0 auto;
+  }
+
+  .workflow-card-footer {
+    background: var(--color-console-subtle);
+  }
+
+  .workflow-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .workflow-actions .btn,
+  .workflow-card-header .btn {
+    min-height: 44px;
+  }
+
+  .workflow-card .btn-primary {
+    border-color: var(--color-console-primary);
+    background-color: var(--color-console-primary);
+    color: white;
+  }
+
+  .workflow-card .btn-primary:not(:disabled):not([aria-busy="true"]):hover {
+    border-color: var(--color-console-primary-strong);
+    background-color: var(--color-console-primary-strong);
+    color: white;
+  }
+
+  .workflow-card .btn-primary:not(:disabled):not([aria-busy="true"]):active {
+    border-color: var(--color-console-primary-strong);
+    background-color: var(--color-console-primary-strong);
+    color: white;
+    filter: brightness(0.9);
+  }
+
+  .workflow-card .btn-danger {
+    border-color: var(--color-console-danger);
+    background-color: var(--color-console-danger);
+    color: white;
+  }
+
+  .workflow-card .btn-danger:not(:disabled):not([aria-busy="true"]):hover {
+    border-color: var(--color-console-danger);
+    background-color: var(--color-console-danger);
+    color: white;
+    filter: brightness(0.92);
+  }
+
+  .workflow-card .btn-danger:not(:disabled):not([aria-busy="true"]):active {
+    border-color: var(--color-console-danger);
+    background-color: var(--color-console-danger);
+    color: white;
+    filter: brightness(0.84);
+  }
+
+  .workflow-form .form-label {
+    margin-bottom: 0.5rem;
+    color: var(--color-console-ink);
+    font-weight: 600;
+  }
+
+  .workflow-form .form-control {
+    min-height: 44px;
+    margin-top: 0;
+    border-color: var(--color-console-border-strong);
+    color: var(--color-console-ink);
+    font-size: 1rem;
+  }
+
+  .workflow-form textarea.form-control {
+    min-height: 7rem;
+    resize: vertical;
+  }
+
+  .workflow-form .form-control.is-invalid {
+    border-color: var(--color-console-danger);
+  }
+
+  .workflow-form .form-hint {
+    margin-top: 0.5rem;
+    color: var(--color-console-muted);
+  }
+
+  .workflow-form .invalid-feedback {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--color-console-danger);
+    font-weight: 600;
+  }
+
+  .workflow-form .password-control {
+    margin-top: 0;
+  }
+
+  .description-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1.25rem 2rem;
+    margin: 0;
+  }
+
+  .description-grid .datagrid-item {
+    min-width: 0;
+  }
+
+  .description-grid .datagrid-title {
+    margin: 0;
+    color: var(--color-console-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .description-grid .datagrid-content {
+    margin: 0.375rem 0 0;
+    color: var(--color-console-ink);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .danger-alert {
+    margin: 0;
+  }
+
+  .danger-alert p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .danger-target-summary,
+  .blueprint-deploy-summary {
+    margin-top: 1.5rem;
+  }
+
+  .deploy-name-field {
+    max-width: 32rem;
+    margin-top: 1.5rem;
+  }
+
   .diagnostic-grid {
     @apply lg:grid-cols-4;
   }
@@ -864,6 +1043,30 @@
 }
 
 @media (max-width: 39.999rem) {
+  .workflow-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workflow-card-header .card-actions,
+  .workflow-card-header .btn-list {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .workflow-card-header .btn-list .btn {
+    flex: 1 1 auto;
+  }
+
+  .workflow-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workflow-actions .btn {
+    width: 100%;
+  }
+
   .resource-list-card .card-header {
     align-items: stretch;
     flex-direction: column;

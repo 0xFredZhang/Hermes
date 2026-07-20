@@ -1,18 +1,30 @@
 {{define "content"}}
-<section class="page-panel" aria-labelledby="project-delete-title">
-  <a class="back-link" href="/projects">返回项目列表</a>
-  <div class="page-header"><div><h2 class="page-title" id="project-delete-title">删除项目</h2><p class="page-description">请在继续前确认目标与影响。</p></div></div>
-  {{if .Error}}
-  <div class="notice err" role="alert"><p>{{.Error}}</p></div>
-  {{else}}
-  <div class="notice err" role="alert"><p>即将永久删除项目“<span class="long-value">{{.Project.Name}}</span>”。仍有蓝图引用时，Hermes 会拒绝删除。</p></div>
-  {{end}}
-  <dl class="summary-grid">
-    <div><dt>名称</dt><dd class="long-value">{{.Project.Name}}</dd></div>
-    <div><dt>描述</dt><dd class="long-value">{{.Project.Description}}</dd></div>
-  </dl>
-  <form method="post" action="/projects/{{.Project.ID}}/delete">
-    <div class="form-actions"><button class="button-danger" type="submit" data-loading-label="删除中…">确认删除</button><a class="button" href="/projects">取消</a></div>
-  </form>
+<section class="card page-panel workflow-card danger-zone" aria-labelledby="project-delete-title">
+  <div class="card-header workflow-card-header">
+    <div class="min-w-0">
+      <a class="back-link" href="/projects"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回项目列表</span></a>
+      <h2 class="card-title page-title" id="project-delete-title">删除项目</h2>
+      <p class="card-subtitle page-description">请在继续前确认目标与影响。</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-danger danger-alert" role="alert">
+      {{if .Error}}
+      <p class="long-value">{{.Error}}</p>
+      {{else}}
+      <p>即将永久删除项目“<span class="long-value">{{.Project.Name}}</span>”。仍有蓝图引用时，Hermes 会拒绝删除。</p>
+      {{end}}
+    </div>
+    <dl class="datagrid description-grid danger-target-summary" aria-label="待删除项目摘要">
+      <div class="datagrid-item"><dt class="datagrid-title">名称</dt><dd class="datagrid-content long-value">{{.Project.Name}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">描述</dt><dd class="datagrid-content long-value">{{.Project.Description}}</dd></div>
+    </dl>
+  </div>
+  <div class="card-footer workflow-card-footer">
+    <form class="workflow-actions" method="post" action="/projects/{{.Project.ID}}/delete">
+      <button class="btn btn-danger" type="submit" data-loading-label="删除中…"><i class="ti ti-trash icon" aria-hidden="true"></i><span>确认删除</span></button>
+      <a class="btn btn-outline-secondary" href="/projects">取消</a>
+    </form>
+  </div>
 </section>
 {{end}}

@@ -47,13 +47,30 @@ func TestTablerAssetsAreEmbedded(t *testing.T) {
 	for _, want := range []string{
 		"--tblr-", ".navbar-vertical", ".app-shell", ".skip-link", ".form-surface", ".password-control",
 		"dialog::backdrop", `content:attr(data-label)`, `.resource-list-card,.job-history-card{border-color:`, `:focus-visible`,
-		`@media (max-width:39.999rem){.resource-list-card .card-header{flex-direction:column`, `.responsive-table-wrap{border:0`,
+		`@media (max-width:39.999rem)`, `.responsive-table-wrap{border:0`,
 		`@media (prefers-reduced-motion:reduce)`, `button[data-loading-label][aria-busy=true]:after`,
 		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
 		`.job-history-wrap`, `.badge.status-active`, `.diagnostic-grid`, `.log-panel{max-height:420px`, `.log-panel-full{max-height:70vh`, `.copy-log-status`,
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
+		}
+	}
+	mobileStart := strings.Index(string(css), `@media (max-width:39.999rem)`)
+	mobileEnd := -1
+	if mobileStart != -1 {
+		if offset := strings.Index(string(css)[mobileStart:], `@media (min-width:40rem)`); offset != -1 {
+			mobileEnd = mobileStart + offset
+		}
+	}
+	if mobileStart == -1 || mobileEnd <= mobileStart {
+		t.Fatal("generated stylesheet is missing the bounded mobile workflow rules")
+	}
+	mobileCSS := string(css)[mobileStart:mobileEnd]
+	for _, selector := range []string{`.workflow-card-header`, `.resource-list-card .card-header`} {
+		rule := regexp.MustCompile(regexp.QuoteMeta(selector) + `\{([^}]*)\}`).FindStringSubmatch(mobileCSS)
+		if len(rule) != 2 || !strings.Contains(rule[1], `flex-direction:column`) || !strings.Contains(rule[1], `align-items:stretch`) {
+			t.Errorf("mobile rule %q must stack and stretch its header: %s", selector, mobileCSS)
 		}
 	}
 
@@ -126,6 +143,33 @@ func TestHermesLinkOverridesPreserveTablerButtonSemantics(t *testing.T) {
 		if !pattern.MatchString(generated) {
 			t.Errorf("generated Tabler %s button rule does not preserve contrasting foreground and hover colors", name)
 		}
+	}
+}
+
+func TestWorkflowSubmitButtonsPreserveSemanticContrast(t *testing.T) {
+	css := readStaticSource(t, "app.css")
+	tests := []struct {
+		name       string
+		selector   string
+		background string
+	}{
+		{name: "primary", selector: `.workflow-card .btn-primary`, background: `var(--color-console-primary)`},
+		{name: "primary hover", selector: `.workflow-card .btn-primary:not(:disabled):not([aria-busy=true]):hover`, background: `var(--color-console-primary-strong)`},
+		{name: "danger", selector: `.workflow-card .btn-danger`, background: `var(--color-console-danger)`},
+		{name: "danger hover", selector: `.workflow-card .btn-danger:not(:disabled):not([aria-busy=true]):hover`, background: `var(--color-console-danger)`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := regexp.MustCompile(regexp.QuoteMeta(tc.selector) + `\{([^}]*)\}`).FindStringSubmatch(css)
+			if len(rule) != 2 {
+				t.Fatalf("generated CSS is missing scoped workflow button rule %q", tc.selector)
+			}
+			for _, want := range []string{`background-color:` + tc.background, `color:#fff`} {
+				if !strings.Contains(rule[1], want) {
+					t.Errorf("workflow %s button rule missing %q: %s", tc.name, want, rule[0])
+				}
+			}
+		})
 	}
 }
 
@@ -891,12 +935,12 @@ func TestFormsHaveExplicitLabelsAndErrorRegions(t *testing.T) {
 		{
 			page: "account_form",
 			data: map[string]any{"Error": "请检查标出的字段。", "Name": "ops", "DefaultRegion": "bad", "AccessKeyID": "AKIA", "FieldErrors": map[string]string{"default_region": "区域无效"}},
-			want: []string{`id="default-region"`, `aria-invalid="true" aria-describedby="default-region-error"`, `id="default-region-error" role="alert">区域无效`},
+			want: []string{`id="default-region"`, `class="form-control is-invalid"`, `aria-invalid="true" aria-describedby="default-region-hint default-region-error"`, `class="invalid-feedback" id="default-region-error" role="alert">区域无效`},
 		},
 		{
 			page: "project_form",
 			data: map[string]any{"Error": "请检查标出的字段。", "Name": "ops", "Description": "too long", "FieldErrors": map[string]string{"description": "描述过长"}},
-			want: []string{`id="project-description"`, `aria-invalid="true" aria-describedby="project-description-error"`, `id="project-description-error" role="alert">描述过长`},
+			want: []string{`id="project-description"`, `class="form-control is-invalid"`, `aria-invalid="true" aria-describedby="project-description-hint project-description-error"`, `class="invalid-feedback" id="project-description-error" role="alert">描述过长`},
 		},
 	} {
 		t.Run("rendered "+tc.page, func(t *testing.T) {
@@ -907,6 +951,226 @@ func TestFormsHaveExplicitLabelsAndErrorRegions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFormsUseTablerValidation(t *testing.T) {
+	blueprint := map[string]any{
+		"ID":   int64(31),
+		"Name": "payments",
+		"Params": map[string]any{
+			"Region": "ap-southeast-1",
+			"EC2":    map[string]any{"InstanceType": "t3.micro", "Count": 2},
+		},
+	}
+	tests := []struct {
+		name        string
+		page        string
+		invalidData map[string]any
+		validData   map[string]any
+		controlID   string
+		hintID      string
+		errorID     string
+		describedBy string
+		errorText   string
+	}{
+		{
+			name: "account form",
+			page: "account_form",
+			invalidData: map[string]any{
+				"Error": "请检查标出的字段。", "Name": "ops", "DefaultRegion": "bad", "AccessKeyID": "AKIA",
+				"FieldErrors": map[string]string{"default_region": "区域无效"},
+			},
+			validData: map[string]any{
+				"Name": "ops", "DefaultRegion": "ap-southeast-1", "AccessKeyID": "AKIA",
+				"FieldErrors": map[string]string{},
+			},
+			controlID: "default-region", hintID: "default-region-hint", errorID: "default-region-error",
+			describedBy: "default-region-hint default-region-error", errorText: "区域无效",
+		},
+		{
+			name: "project form",
+			page: "project_form",
+			invalidData: map[string]any{
+				"Error": "请检查标出的字段。", "Name": "ops", "Description": "too long",
+				"FieldErrors": map[string]string{"description": "描述过长"},
+			},
+			validData: map[string]any{
+				"Name": "ops", "Description": "operations", "FieldErrors": map[string]string{},
+			},
+			controlID: "project-description", hintID: "project-description-hint", errorID: "project-description-error",
+			describedBy: "project-description-hint project-description-error", errorText: "描述过长",
+		},
+		{
+			name: "blueprint deploy form",
+			page: "blueprint_deploy",
+			invalidData: map[string]any{
+				"Blueprint": blueprint, "EnvironmentName": "", "EnvironmentNameError": "请输入环境名。",
+			},
+			validData: map[string]any{
+				"Blueprint": blueprint, "EnvironmentName": "staging", "EnvironmentNameError": "",
+			},
+			controlID: "environment-name", hintID: "env-name-hint", errorID: "env-name-error",
+			describedBy: "env-name-hint env-name-error", errorText: "请输入环境名。",
+		},
+	}
+
+	controlPattern := regexp.MustCompile(`<(?:input|select|textarea)\b[^>]*>`)
+	idPattern := regexp.MustCompile(`\bid="([^"]+)"`)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := renderPageBody(t, tc.page, tc.invalidData)
+			for _, control := range controlPattern.FindAllString(invalid, -1) {
+				if strings.Contains(control, `type="hidden"`) {
+					continue
+				}
+				wantClass := "form-control"
+				if strings.HasPrefix(control, "<select") {
+					wantClass = "form-select"
+				}
+				if !strings.Contains(control, `class="`+wantClass) {
+					t.Errorf("visible control does not use Tabler %s: %s", wantClass, control)
+				}
+				id := idPattern.FindStringSubmatch(control)
+				if len(id) != 2 || !strings.Contains(invalid, `class="form-label" for="`+id[1]+`"`) {
+					t.Errorf("visible control lacks an explicit Tabler label: %s", control)
+				}
+			}
+
+			invalidControl := regexp.MustCompile(`<(?:input|select|textarea)\b[^>]*\bid="` + regexp.QuoteMeta(tc.controlID) + `"[^>]*>`).FindString(invalid)
+			for _, want := range []string{`class="form-control is-invalid"`, `aria-invalid="true"`, `aria-describedby="` + tc.describedBy + `"`} {
+				if !strings.Contains(invalidControl, want) {
+					t.Errorf("invalid control %q missing %q: %s", tc.controlID, want, invalidControl)
+				}
+			}
+			for _, want := range []string{
+				`class="form-hint" id="` + tc.hintID + `"`,
+				`class="invalid-feedback" id="` + tc.errorID + `" role="alert">` + tc.errorText,
+			} {
+				if !strings.Contains(invalid, want) {
+					t.Errorf("rendered invalid form missing %q", want)
+				}
+			}
+
+			valid := renderPageBody(t, tc.page, tc.validData)
+			validControl := regexp.MustCompile(`<(?:input|select|textarea)\b[^>]*\bid="` + regexp.QuoteMeta(tc.controlID) + `"[^>]*>`).FindString(valid)
+			if !strings.Contains(validControl, `class="form-control"`) {
+				t.Errorf("valid control %q does not use the base Tabler class: %s", tc.controlID, validControl)
+			}
+			for _, unwanted := range []string{`is-invalid`, `aria-invalid="true"`, `id="` + tc.errorID + `"`} {
+				if strings.Contains(validControl, unwanted) || (strings.HasPrefix(unwanted, `id=`) && strings.Contains(valid, unwanted)) {
+					t.Errorf("valid form retained invalid-state token %q: %s", unwanted, valid)
+				}
+			}
+		})
+	}
+
+	accountSource := readTemplateSource(t, "account_form.html")
+	if !strings.Contains(accountSource, `class="btn btn-outline-secondary password-toggle"`) || !strings.Contains(accountSource, `>显示</button>`) {
+		t.Error("password toggle must use a Tabler button while retaining text-only content for the textContent enhancement")
+	}
+}
+
+func TestDestructivePagesUseTablerDangerZones(t *testing.T) {
+	tests := []struct {
+		name        string
+		page        string
+		data        map[string]any
+		action      string
+		cancel      string
+		targetLabel string
+		targetValue string
+	}{
+		{
+			name: "account", page: "account_delete", action: "/accounts/21/delete", cancel: "/accounts",
+			targetLabel: "待删除账号摘要", targetValue: "prod-main",
+			data: map[string]any{"Account": map[string]any{"ID": int64(21), "Name": "prod-main", "DefaultRegion": "ap-southeast-1", "AWSAccountID": "123456789012"}},
+		},
+		{
+			name: "project", page: "project_delete", action: "/projects/22/delete", cancel: "/projects",
+			targetLabel: "待删除项目摘要", targetValue: "console",
+			data: map[string]any{"Project": map[string]any{"ID": int64(22), "Name": "console", "Description": "operations"}},
+		},
+		{
+			name: "blueprint", page: "blueprint_delete", action: "/blueprints/23/delete", cancel: "/blueprints",
+			targetLabel: "待删除蓝图摘要", targetValue: "baseline",
+			data: map[string]any{"Blueprint": map[string]any{
+				"ID": int64(23), "Name": "baseline",
+				"Params": map[string]any{"Region": "ap-southeast-1", "EC2": map[string]any{"InstanceType": "t3.micro", "Count": 1}},
+			}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := renderPageBody(t, tc.page, tc.data)
+			for _, want := range []string{
+				`class="card page-panel workflow-card danger-zone"`,
+				`class="alert alert-danger danger-alert" role="alert"`,
+				`class="datagrid description-grid danger-target-summary" aria-label="` + tc.targetLabel + `"`,
+				`class="datagrid-content long-value">` + tc.targetValue,
+				`method="post" action="` + tc.action + `"`,
+				`class="btn btn-danger" type="submit" data-loading-label="删除中…"`,
+				`class="btn btn-outline-secondary" href="` + tc.cancel + `">取消</a>`,
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("rendered danger zone missing %q: %s", want, body)
+				}
+			}
+		})
+	}
+}
+
+func TestBlueprintDetailUsesTablerSummary(t *testing.T) {
+	name := strings.Repeat("B", 128)
+	region := strings.Repeat("region", 16)
+	instanceType := strings.Repeat("instance", 16)
+	blueprint := map[string]any{
+		"ID":   int64(41),
+		"Name": name,
+		"Params": map[string]any{
+			"Region": region,
+			"EC2": map[string]any{
+				"InstanceType": instanceType, "Count": 3, "RootVolumeGB": 64,
+			},
+			"Network": map[string]any{"Enabled": true},
+			"RDS":     map[string]any{"Enabled": false},
+			"Redis":   map[string]any{"Enabled": true},
+		},
+	}
+
+	detail := renderPageBody(t, "blueprint_detail", map[string]any{"Blueprint": blueprint})
+	for _, want := range []string{
+		`class="card page-panel workflow-card blueprint-detail-card" aria-labelledby="blueprint-detail-title"`,
+		`class="card-title page-title long-value" id="blueprint-detail-title">` + name,
+		`class="datagrid description-grid blueprint-summary" aria-label="蓝图资源摘要"`,
+		`class="datagrid-content long-value">` + region,
+		`class="datagrid-content long-value">` + instanceType + ` × 3`,
+		`class="btn btn-outline-secondary" href="/blueprints/41/edit"`,
+		`class="btn btn-outline-secondary" href="/blueprints/41/duplicate"`,
+		`class="btn btn-primary" href="/blueprints/41/deploy"`,
+	} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("rendered blueprint detail missing %q: %s", want, detail)
+		}
+	}
+
+	deploy := renderPageBody(t, "blueprint_deploy", map[string]any{
+		"Blueprint": blueprint, "EnvironmentName": "staging", "EnvironmentNameError": "",
+	})
+	for _, want := range []string{
+		`class="card page-panel workflow-card blueprint-deploy-card" aria-labelledby="blueprint-deploy-title"`,
+		`class="card-title page-title long-value" id="blueprint-deploy-title">部署 ` + name,
+		`class="datagrid description-grid blueprint-deploy-summary" aria-label="部署资源摘要"`,
+		`class="datagrid-content long-value">` + region,
+		`class="datagrid-content long-value">` + instanceType + ` × 3`,
+		`method="post" action="/blueprints/41/deploy"`,
+		`class="btn btn-primary" type="submit" data-loading-label="启动中…"`,
+		`class="btn btn-outline-secondary" href="/blueprints/41">取消</a>`,
+	} {
+		if !strings.Contains(deploy, want) {
+			t.Errorf("rendered blueprint deploy page missing %q: %s", want, deploy)
+		}
 	}
 }
 
@@ -1209,7 +1473,7 @@ func TestBlueprintDeleteWrapsMaximumLengthName(t *testing.T) {
 
 	for _, want := range []string{
 		`<p class="long-value">即将永久删除蓝图“` + name + `”。已有环境引用时，Hermes 会拒绝删除。</p>`,
-		`<dd class="long-value">` + name + `</dd>`,
+		`<dd class="datagrid-content long-value">` + name + `</dd>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered delete confirmation lacks safe wrapping hook %q: %s", want, body)

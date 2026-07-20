@@ -1679,11 +1679,11 @@ func TestBlueprintDeployErrorAssociatesEnvironmentName(t *testing.T) {
 	}
 	body := rec.Body.String()
 	tag := htmlTagContaining(t, body, `name="env_name"`)
-	if !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="env-name-error env-name-hint"`) || !strings.Contains(body, `id="env-name-error"`) {
+	if !strings.Contains(tag, `class="form-control is-invalid"`) || !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="env-name-hint env-name-error"`) || !strings.Contains(body, `class="invalid-feedback" id="env-name-error" role="alert"`) {
 		t.Fatalf("deploy error is not associated: tag=%s body=%s", tag, body)
 	}
 	valid := authedGet(t, d, "/blueprints/"+itoa(id)+"/deploy").Body.String()
-	if strings.Contains(valid, `aria-invalid="true"`) || strings.Contains(valid, `id="env-name-error"`) {
+	if strings.Contains(valid, `is-invalid`) || strings.Contains(valid, `aria-invalid="true"`) || strings.Contains(valid, `id="env-name-error"`) {
 		t.Fatalf("valid deploy form claims invalid: %s", valid)
 	}
 }

@@ -1,1 +1,28 @@
-{{define "content"}}<section class="page-panel"><a class="back-link" href="/blueprints">返回蓝图</a><div class="page-header"><div><h2 class="page-title">{{.Blueprint.Name}}</h2><p class="page-description">蓝图详情与部署入口</p></div><div class="action-group"><a class="button" href="/blueprints/{{.Blueprint.ID}}/edit">编辑</a><a class="button" href="/blueprints/{{.Blueprint.ID}}/duplicate">复制</a><a class="button-primary" href="/blueprints/{{.Blueprint.ID}}/deploy">部署</a></div></div><dl class="summary-grid"><div><dt>Region</dt><dd>{{.Blueprint.Params.Region}}</dd></div><div><dt>EC2</dt><dd>{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div><div><dt>系统盘</dt><dd>{{.Blueprint.Params.EC2.RootVolumeGB}} GB</dd></div><div><dt>网络</dt><dd>{{if .Blueprint.Params.Network.Enabled}}已启用{{else}}未启用{{end}}</dd></div><div><dt>MySQL</dt><dd>{{if .Blueprint.Params.RDS.Enabled}}已启用{{else}}未启用{{end}}</dd></div><div><dt>Redis</dt><dd>{{if .Blueprint.Params.Redis.Enabled}}已启用{{else}}未启用{{end}}</dd></div></dl></section>{{end}}
+{{define "content"}}
+<section class="card page-panel workflow-card blueprint-detail-card" aria-labelledby="blueprint-detail-title">
+  <div class="card-header workflow-card-header">
+    <div class="min-w-0">
+      <a class="back-link" href="/blueprints"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回蓝图</span></a>
+      <h2 class="card-title page-title long-value" id="blueprint-detail-title">{{.Blueprint.Name}}</h2>
+      <p class="card-subtitle page-description">蓝图详情与部署入口</p>
+    </div>
+    <div class="card-actions">
+      <div class="btn-list">
+        <a class="btn btn-outline-secondary" href="/blueprints/{{.Blueprint.ID}}/edit"><i class="ti ti-pencil icon" aria-hidden="true"></i><span>编辑</span></a>
+        <a class="btn btn-outline-secondary" href="/blueprints/{{.Blueprint.ID}}/duplicate"><i class="ti ti-copy icon" aria-hidden="true"></i><span>复制</span></a>
+        <a class="btn btn-primary" href="/blueprints/{{.Blueprint.ID}}/deploy"><i class="ti ti-rocket icon" aria-hidden="true"></i><span>部署</span></a>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <dl class="datagrid description-grid blueprint-summary" aria-label="蓝图资源摘要">
+      <div class="datagrid-item"><dt class="datagrid-title">Region</dt><dd class="datagrid-content long-value">{{.Blueprint.Params.Region}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">EC2</dt><dd class="datagrid-content long-value">{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">系统盘</dt><dd class="datagrid-content long-value">{{.Blueprint.Params.EC2.RootVolumeGB}} GB</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">网络</dt><dd class="datagrid-content">{{if .Blueprint.Params.Network.Enabled}}<span class="badge status-success">已启用</span>{{else}}<span class="badge status-neutral">未启用</span>{{end}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">MySQL</dt><dd class="datagrid-content">{{if .Blueprint.Params.RDS.Enabled}}<span class="badge status-success">已启用</span>{{else}}<span class="badge status-neutral">未启用</span>{{end}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">Redis</dt><dd class="datagrid-content">{{if .Blueprint.Params.Redis.Enabled}}<span class="badge status-success">已启用</span>{{else}}<span class="badge status-neutral">未启用</span>{{end}}</dd></div>
+    </dl>
+  </div>
+</section>
+{{end}}

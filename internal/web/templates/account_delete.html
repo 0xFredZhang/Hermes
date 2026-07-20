@@ -1,19 +1,31 @@
 {{define "content"}}
-<section class="page-panel" aria-labelledby="account-delete-title">
-  <a class="back-link" href="/accounts">返回账号列表</a>
-  <div class="page-header"><div><h2 class="page-title" id="account-delete-title">删除 AWS 云账号</h2><p class="page-description">请在继续前确认目标与影响。</p></div></div>
-  {{if .Error}}
-  <div class="notice err" role="alert"><p>{{.Error}}</p></div>
-  {{else}}
-  <div class="notice err" role="alert"><p>即将永久删除账号“<span class="long-value">{{.Account.Name}}</span>”。仍有蓝图或环境引用时，Hermes 会拒绝删除。</p></div>
-  {{end}}
-  <dl class="summary-grid">
-    <div><dt>别名</dt><dd class="long-value">{{.Account.Name}}</dd></div>
-    <div><dt>默认区域</dt><dd class="long-value">{{.Account.DefaultRegion}}</dd></div>
-    <div><dt>Account ID</dt><dd class="long-value">{{.Account.AWSAccountID}}</dd></div>
-  </dl>
-  <form method="post" action="/accounts/{{.Account.ID}}/delete">
-    <div class="form-actions"><button class="button-danger" type="submit" data-loading-label="删除中…">确认删除</button><a class="button" href="/accounts">取消</a></div>
-  </form>
+<section class="card page-panel workflow-card danger-zone" aria-labelledby="account-delete-title">
+  <div class="card-header workflow-card-header">
+    <div class="min-w-0">
+      <a class="back-link" href="/accounts"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回账号列表</span></a>
+      <h2 class="card-title page-title" id="account-delete-title">删除 AWS 云账号</h2>
+      <p class="card-subtitle page-description">请在继续前确认目标与影响。</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-danger danger-alert" role="alert">
+      {{if .Error}}
+      <p class="long-value">{{.Error}}</p>
+      {{else}}
+      <p>即将永久删除账号“<span class="long-value">{{.Account.Name}}</span>”。仍有蓝图或环境引用时，Hermes 会拒绝删除。</p>
+      {{end}}
+    </div>
+    <dl class="datagrid description-grid danger-target-summary" aria-label="待删除账号摘要">
+      <div class="datagrid-item"><dt class="datagrid-title">别名</dt><dd class="datagrid-content long-value">{{.Account.Name}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">默认区域</dt><dd class="datagrid-content long-value">{{.Account.DefaultRegion}}</dd></div>
+      <div class="datagrid-item"><dt class="datagrid-title">Account ID</dt><dd class="datagrid-content long-value">{{.Account.AWSAccountID}}</dd></div>
+    </dl>
+  </div>
+  <div class="card-footer workflow-card-footer">
+    <form class="workflow-actions" method="post" action="/accounts/{{.Account.ID}}/delete">
+      <button class="btn btn-danger" type="submit" data-loading-label="删除中…"><i class="ti ti-trash icon" aria-hidden="true"></i><span>确认删除</span></button>
+      <a class="btn btn-outline-secondary" href="/accounts">取消</a>
+    </form>
+  </div>
 </section>
 {{end}}

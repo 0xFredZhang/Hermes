@@ -1,28 +1,32 @@
 {{define "content"}}
-<section class="page-panel form-surface" aria-labelledby="project-form-title">
-  <a class="back-link" href="/projects">返回项目列表</a>
-  <div class="page-header">
-    <div>
-      <h2 class="page-title" id="project-form-title">新建项目</h2>
-      <p class="page-description">项目用于归类同一应用或阶段的蓝图和环境。</p>
+<section class="card page-panel workflow-card form-workflow-card" aria-labelledby="project-form-title">
+  <div class="card-header workflow-card-header">
+    <div class="min-w-0">
+      <a class="back-link" href="/projects"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回项目列表</span></a>
+      <h2 class="card-title page-title" id="project-form-title">新建项目</h2>
+      <p class="card-subtitle page-description">项目用于归类同一应用或阶段的蓝图和环境。</p>
     </div>
   </div>
-  {{if .Error}}<p class="notice err" role="alert">{{.Error}}</p>{{end}}
-  <form class="form-page" method="post" action="/projects">
-    <div class="field-block">
-      <label class="field-label" for="project-name">项目名</label>
-      <input id="project-name" name="name" value="{{.Name}}" maxlength="128" autocomplete="off" required{{with index .FieldErrors "name"}} aria-invalid="true" aria-describedby="project-name-error"{{end}}>
-      {{with index .FieldErrors "name"}}<p class="field-error" id="project-name-error" role="alert">{{.}}</p>{{end}}
+  <form class="workflow-form" method="post" action="/projects">
+    <div class="card-body">
+      {{if .Error}}<div class="alert alert-danger" role="alert">{{.Error}}</div>{{end}}
+      <div class="mb-3">
+        <label class="form-label" for="project-name">项目名</label>
+        <input class="form-control{{with index .FieldErrors "name"}} is-invalid{{end}}" id="project-name" name="name" value="{{.Name}}" maxlength="128" autocomplete="off" required{{with index .FieldErrors "name"}} aria-invalid="true" aria-describedby="project-name-error"{{end}}>
+        {{with index .FieldErrors "name"}}<div class="invalid-feedback" id="project-name-error" role="alert">{{.}}</div>{{end}}
+      </div>
+      <div>
+        <label class="form-label" for="project-description">描述</label>
+        <textarea class="form-control{{with index .FieldErrors "description"}} is-invalid{{end}}" id="project-description" name="description" maxlength="1000" rows="4"{{with index .FieldErrors "description"}} aria-invalid="true" aria-describedby="project-description-hint project-description-error"{{else}} aria-describedby="project-description-hint"{{end}}>{{.Description}}</textarea>
+        <div class="form-hint" id="project-description-hint">可选。简要说明应用、团队或环境阶段。</div>
+        {{with index .FieldErrors "description"}}<div class="invalid-feedback" id="project-description-error" role="alert">{{.}}</div>{{end}}
+      </div>
     </div>
-    <div class="field-block">
-      <label class="field-label" for="project-description">描述</label>
-      <textarea id="project-description" name="description" maxlength="1000" rows="4"{{with index .FieldErrors "description"}} aria-invalid="true" aria-describedby="project-description-error"{{end}}>{{.Description}}</textarea>
-      <p class="field-hint">可选。简要说明应用、团队或环境阶段。</p>
-      {{with index .FieldErrors "description"}}<p class="field-error" id="project-description-error" role="alert">{{.}}</p>{{end}}
-    </div>
-    <div class="form-actions">
-      <button class="button-primary" type="submit" data-loading-label="创建中…">创建项目</button>
-      <a class="button" href="/projects">取消</a>
+    <div class="card-footer workflow-card-footer">
+      <div class="workflow-actions">
+        <button class="btn btn-primary" type="submit" data-loading-label="创建中…"><i class="ti ti-plus icon" aria-hidden="true"></i><span>创建项目</span></button>
+        <a class="btn btn-outline-secondary" href="/projects">取消</a>
+      </div>
     </div>
   </form>
 </section>

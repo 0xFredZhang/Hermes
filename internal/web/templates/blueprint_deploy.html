@@ -1,12 +1,31 @@
 {{define "content"}}
-<section class="page-panel form-page">
-  <a class="back-link" href="/blueprints/{{.Blueprint.ID}}">返回蓝图详情</a>
-  <div class="page-header"><div><h2 class="page-title">部署 {{.Blueprint.Name}}</h2><p class="page-description">将使用当前蓝图参数创建环境并启动预演。</p></div></div>
-  <dl class="summary-grid"><div><dt>Region</dt><dd>{{.Blueprint.Params.Region}}</dd></div><div><dt>资源</dt><dd>{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div></dl>
-  {{if .EnvironmentNameError}}<p class="notice err" id="env-name-error" role="alert">{{.EnvironmentNameError}}</p>{{end}}
-  <form method="post" action="/blueprints/{{.Blueprint.ID}}/deploy">
-    <div class="field"><label class="field-label" for="environment-name">环境名 *</label><input id="environment-name" name="env_name" value="{{.EnvironmentName}}" required{{if .EnvironmentNameError}} aria-invalid="true" aria-describedby="env-name-error env-name-hint"{{else}} aria-describedby="env-name-hint"{{end}}><span class="field-hint" id="env-name-hint">使用易于识别的名称，例如 staging。</span></div>
-    <div class="form-actions"><button class="button-primary" type="submit" data-loading-label="启动中…">启动预演</button><a class="button" href="/blueprints/{{.Blueprint.ID}}">取消</a></div>
+<section class="card page-panel workflow-card blueprint-deploy-card" aria-labelledby="blueprint-deploy-title">
+  <div class="card-header workflow-card-header">
+    <div class="min-w-0">
+      <a class="back-link" href="/blueprints/{{.Blueprint.ID}}"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回蓝图详情</span></a>
+      <h2 class="card-title page-title long-value" id="blueprint-deploy-title">部署 {{.Blueprint.Name}}</h2>
+      <p class="card-subtitle page-description">将使用当前蓝图参数创建环境并启动预演。</p>
+    </div>
+  </div>
+  <form class="workflow-form" method="post" action="/blueprints/{{.Blueprint.ID}}/deploy">
+    <div class="card-body">
+      <dl class="datagrid description-grid blueprint-deploy-summary" aria-label="部署资源摘要">
+        <div class="datagrid-item"><dt class="datagrid-title">Region</dt><dd class="datagrid-content long-value">{{.Blueprint.Params.Region}}</dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">资源</dt><dd class="datagrid-content long-value">{{.Blueprint.Params.EC2.InstanceType}} × {{.Blueprint.Params.EC2.Count}}</dd></div>
+      </dl>
+      <div class="deploy-name-field">
+        <label class="form-label" for="environment-name">环境名 *</label>
+        <input class="form-control{{if .EnvironmentNameError}} is-invalid{{end}}" id="environment-name" name="env_name" value="{{.EnvironmentName}}" required{{if .EnvironmentNameError}} aria-invalid="true" aria-describedby="env-name-hint env-name-error"{{else}} aria-describedby="env-name-hint"{{end}}>
+        <div class="form-hint" id="env-name-hint">使用易于识别的名称，例如 staging。</div>
+        {{if .EnvironmentNameError}}<div class="invalid-feedback" id="env-name-error" role="alert">{{.EnvironmentNameError}}</div>{{end}}
+      </div>
+    </div>
+    <div class="card-footer workflow-card-footer">
+      <div class="workflow-actions">
+        <button class="btn btn-primary" type="submit" data-loading-label="启动中…"><i class="ti ti-player-play icon" aria-hidden="true"></i><span>启动预演</span></button>
+        <a class="btn btn-outline-secondary" href="/blueprints/{{.Blueprint.ID}}">取消</a>
+      </div>
+    </div>
   </form>
 </section>
 {{end}}
