@@ -76,6 +76,16 @@ func TestTablerAssetsAreEmbedded(t *testing.T) {
 	}
 }
 
+func TestTablerSidebarCollapseVisibilityIsSafe(t *testing.T) {
+	css := readStaticSource(t, "app.css")
+	if !strings.Contains(css, `.collapse:not(.show){display:none}`) {
+		t.Fatal("generated stylesheet is missing Tabler's collapse display rule")
+	}
+	if strings.Contains(css, `.collapse{visibility:collapse}`) {
+		t.Fatal("Tailwind visibility utility overrides Tabler's sidebar collapse visibility")
+	}
+}
+
 func TestTablerFontReferencesMatchEmbeddedAssets(t *testing.T) {
 	css, err := StaticFS.ReadFile("static/app.css")
 	if err != nil {
