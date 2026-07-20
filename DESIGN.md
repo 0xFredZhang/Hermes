@@ -27,15 +27,15 @@ typography:
     letterSpacing: "0"
   headline:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 700
-    lineHeight: 1.25
+    fontSize: "1.25rem"
+    fontWeight: 600
+    lineHeight: 1.4
     letterSpacing: "0"
   title:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "1.17rem"
-    fontWeight: 700
-    lineHeight: 1.3
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.5
     letterSpacing: "0"
   body:
     fontFamily: "system-ui, sans-serif"
@@ -45,9 +45,9 @@ typography:
     letterSpacing: "0"
   label:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "1rem"
-    fontWeight: 400
-    lineHeight: "normal"
+    fontSize: "0.875rem"
+    fontWeight: 500
+    lineHeight: 1.4286
     letterSpacing: "0"
 rounded:
   sm: "6px"
@@ -143,14 +143,14 @@ Hermes applies a restrained token layer over Tabler: a cool off-white app canvas
 **Body Font:** `system-ui, sans-serif`
 **Label/Mono Font:** none yet; logs currently inherit the same font stack.
 
-**Character:** System typography is correct for Hermes. It keeps the console familiar, fast, and native-feeling. The next pass should tighten hierarchy with explicit sizes and weights instead of introducing decorative fonts.
+**Character:** System typography keeps Hermes familiar, fast, and native-feeling. The shipped hierarchy uses compact fixed sizes and deliberate weights instead of decorative fonts or viewport scaling.
 
 ### Hierarchy
 - **Display** (700, 2rem, 1.2): Product title only. Avoid hero-scale display text in this tool.
-- **Headline** (700, 1.5rem, 1.25): Page titles such as Accounts, Projects, Blueprints, and Environments.
-- **Title** (700, 1.17rem, 1.3): Section labels such as live logs and grouped outputs.
+- **Headline** (600, 1.25rem, 1.4): Page titles such as Accounts, Projects, Blueprints, and Environments.
+- **Title** (600, 1rem, 1.5): Section labels such as live logs and grouped outputs.
 - **Body** (400, 1rem, normal): Tables, form values, paragraphs, and operational copy.
-- **Label** (400, 1rem, normal): Current forms place labels inline with controls; future forms should give labels consistent block rhythm.
+- **Label** (500, 0.875rem, 1.4286): Form labels use a compact, consistent block rhythm above controls.
 
 ### Named Rules
 **The Native Tool Rule.** Use one system font stack across UI labels, tables, buttons, and forms. No display font belongs in the console.

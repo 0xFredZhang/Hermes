@@ -93,6 +93,10 @@
     white-space: nowrap;
     border: 0;
   }
+
+  .min-w-0 {
+    min-width: 0;
+  }
 }
 
 @layer components {

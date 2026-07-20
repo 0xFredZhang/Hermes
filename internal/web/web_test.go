@@ -186,6 +186,36 @@ func TestScreenReaderOnlyCaptionsStaySemanticAndVisuallyHidden(t *testing.T) {
 	}
 }
 
+func TestMinimumWidthCompatibilityHooksRemainFunctional(t *testing.T) {
+	entries, err := os.ReadDir("templates")
+	if err != nil {
+		t.Fatalf("read templates directory: %v", err)
+	}
+
+	hookCount := 0
+	var hookFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		source := readTemplateSource(t, entry.Name())
+		count := strings.Count(source, "min-w-0")
+		if count == 0 {
+			continue
+		}
+		hookCount += count
+		hookFiles = append(hookFiles, entry.Name())
+	}
+	if hookCount == 0 {
+		t.Fatal("templates contain no min-w-0 compatibility hooks")
+	}
+
+	css := readStaticSource(t, "app.css")
+	if !strings.Contains(css, `.min-w-0{min-width:0}`) {
+		t.Errorf("generated stylesheet does not define standalone min-w-0 behavior for %d hooks in %s", hookCount, strings.Join(hookFiles, ", "))
+	}
+}
+
 func TestPagePanelsPreserveTablerCardBackground(t *testing.T) {
 	sourceBytes, err := os.ReadFile("assets/app.css")
 	if err != nil {
