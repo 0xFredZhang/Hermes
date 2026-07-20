@@ -146,11 +146,11 @@ Hermes applies a restrained token layer over Tabler: a cool off-white app canvas
 **Character:** System typography keeps Hermes familiar, fast, and native-feeling. The shipped hierarchy uses compact fixed sizes and deliberate weights instead of decorative fonts or viewport scaling.
 
 ### Hierarchy
-- **Display** (700, 2rem, 1.2): Product title only. Avoid hero-scale display text in this tool.
+- **Display** (700, 2rem, 1.2): Reserved token only; the current console does not use hero-scale display text. Brand marks use compact 1.125rem or 1.5rem treatments.
 - **Headline** (600, 1.25rem, 1.4): Page titles such as Accounts, Projects, Blueprints, and Environments.
 - **Title** (600, 1rem, 1.5): Section labels such as live logs and grouped outputs.
 - **Body** (400, 1rem, normal): Tables, form values, paragraphs, and operational copy.
-- **Label** (500, 0.875rem, 1.4286): Form labels use a compact, consistent block rhythm above controls.
+- **Label** (500, 0.875rem, 1.4286): Base labels use a compact, consistent block rhythm above controls. Workflow form labels are intentionally emphasized at 600 while retaining the body line-height.
 
 ### Named Rules
 **The Native Tool Rule.** Use one system font stack across UI labels, tables, buttons, and forms. No display font belongs in the console.

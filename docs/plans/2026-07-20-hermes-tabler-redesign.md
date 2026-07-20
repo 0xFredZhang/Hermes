@@ -398,4 +398,3 @@ Expected: all commands PASS and browser console/network checks are clean.
 git add DESIGN.md internal/web
 git commit -m "✅ test(web): harden Tabler console across viewports"
 ```
-
