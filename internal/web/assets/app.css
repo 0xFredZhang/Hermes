@@ -110,10 +110,6 @@
     @apply min-w-0 flex-1 pb-8;
   }
 
-  .page-panel {
-    @apply bg-transparent;
-  }
-
   .page-header {
     @apply mb-4 flex flex-col gap-2 border-b border-console-border pb-4 sm:flex-row sm:items-end sm:justify-between;
   }
@@ -273,7 +269,7 @@
   }
 
   .button,
-  button {
+  button:not(.btn) {
     @apply inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-console-border-strong bg-console-surface px-3 py-2 text-sm font-medium text-console-ink transition-colors;
     min-height: 44px;
   }
@@ -291,12 +287,12 @@
   }
 
   .button:not([aria-disabled="true"]):not([aria-busy="true"]):hover,
-  button:not(:disabled):hover {
+  button:not(.btn):not(:disabled):hover {
     @apply border-console-primary bg-console-subtle text-console-primary-strong;
   }
 
   .button:not([aria-disabled="true"]):not([aria-busy="true"]):active,
-  button:not(:disabled):active {
+  button:not(.btn):not(:disabled):active {
     @apply border-console-primary-strong bg-console-border text-console-primary-strong;
   }
 

@@ -58,18 +58,21 @@ class FakeButton extends FakeElement {
 class FakeDialog extends FakeElement {}
 class FakeForm extends FakeElement {}
 
-function executeApp() {
+function executeApp({ passwordToggle = null, passwordInput = null } = {}) {
   const ids = [
     "account-feedback", "project-feedback", "blueprint-feedback",
     "account-delete-status", "project-delete-status", "blueprint-delete-status",
   ];
   const elements = new Map(ids.map((id) => [id, new FakeElement({ id })]));
+  if (passwordInput) elements.set(passwordInput.id, passwordInput);
   const body = new FakeElement();
   const documentListeners = new Map();
   const document = {
     body,
     activeElement: null,
-    querySelectorAll() { return []; },
+    querySelectorAll(selector) {
+      return selector === "[data-password-toggle]" && passwordToggle ? [passwordToggle] : [];
+    },
     querySelector() { return null; },
     getElementById(id) { return elements.get(id) || null; },
     addEventListener(name, listener) {
@@ -104,6 +107,30 @@ function executeApp() {
     },
   };
 }
+
+test("only a bound password toggle becomes visible", async () => {
+  const unresolved = new FakeButton({ hidden: true, textContent: "显示" });
+  unresolved.setAttribute("aria-controls", "missing-password");
+  executeApp({ passwordToggle: unresolved });
+  assert.equal(unresolved.hidden, true);
+  assert.equal(unresolved.listeners.has("click"), false);
+
+  const input = new FakeInput({ id: "secret-access-key" });
+  input.type = "password";
+  const toggle = new FakeButton({ hidden: true, textContent: "显示" });
+  toggle.setAttribute("aria-controls", input.id);
+  toggle.setAttribute("aria-pressed", "false");
+
+  executeApp({ passwordToggle: toggle, passwordInput: input });
+
+  assert.equal(toggle.hidden, false);
+  assert.equal(toggle.listeners.get("click")?.length, 1);
+  await toggle.emit("click");
+  assert.equal(input.type, "text");
+  assert.equal(toggle.textContent, "隐藏");
+  assert.equal(toggle.getAttribute("aria-pressed"), "true");
+  assert.equal(input.focusCalls, 1);
+});
 
 test("successful delete events announce through the matching status region and focus it", async () => {
   const run = executeApp();

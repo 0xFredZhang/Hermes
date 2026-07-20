@@ -31,7 +31,7 @@
         <label class="form-label" for="secret-access-key">Secret Access Key</label>
         <div class="password-control">
           <input class="form-control{{with index .FieldErrors "secret_access_key"}} is-invalid{{end}}" id="secret-access-key" type="password" name="secret_access_key" maxlength="256" autocomplete="new-password" spellcheck="false" required{{with index .FieldErrors "secret_access_key"}} aria-invalid="true" aria-describedby="secret-access-key-hint secret-access-key-error"{{else}} aria-describedby="secret-access-key-hint"{{end}}>
-          <button class="btn btn-outline-secondary password-toggle" type="button" data-password-toggle aria-controls="secret-access-key" aria-pressed="false">显示</button>
+          <button class="btn btn-outline-secondary password-toggle" type="button" data-password-toggle aria-controls="secret-access-key" aria-pressed="false" hidden>显示</button>
         </div>
         <div class="form-hint" id="secret-access-key-hint">提交失败后不会回显此值。</div>
         {{with index .FieldErrors "secret_access_key"}}<div class="invalid-feedback" id="secret-access-key-error" role="alert">{{.}}</div>{{end}}

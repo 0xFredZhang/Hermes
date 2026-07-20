@@ -103,6 +103,25 @@ func TestTablerSidebarCollapseVisibilityIsSafe(t *testing.T) {
 	}
 }
 
+func TestPagePanelsPreserveTablerCardBackground(t *testing.T) {
+	sourceBytes, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read source stylesheet: %v", err)
+	}
+	source := string(sourceBytes)
+	if regexp.MustCompile(`(?s)\.page-panel\s*\{[^}]*bg-transparent`).MatchString(source) {
+		t.Error("legacy page-panel styling overrides Tabler card backgrounds with transparency")
+	}
+
+	generated := readStaticSource(t, "app.css")
+	if !regexp.MustCompile(`\.card\{[^}]*background-color:var\(--tblr-card-bg\)[^}]*\}`).MatchString(generated) {
+		t.Fatal("generated Tabler card rule does not use --tblr-card-bg")
+	}
+	if regexp.MustCompile(`\.page-panel\{[^}]*(?:background|background-color):#0000`).MatchString(generated) {
+		t.Error("generated page-panel rule overrides --tblr-card-bg with transparency")
+	}
+}
+
 func TestHermesLinkOverridesPreserveTablerButtonSemantics(t *testing.T) {
 	sourceBytes, err := os.ReadFile("assets/app.css")
 	if err != nil {
@@ -143,6 +162,41 @@ func TestHermesLinkOverridesPreserveTablerButtonSemantics(t *testing.T) {
 		if !pattern.MatchString(generated) {
 			t.Errorf("generated Tabler %s button rule does not preserve contrasting foreground and hover colors", name)
 		}
+	}
+}
+
+func TestLegacyButtonCompatibilityStylesExcludeTablerButtons(t *testing.T) {
+	sourceBytes, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read source stylesheet: %v", err)
+	}
+	source := string(sourceBytes)
+	componentsStart := strings.Index(source, "@layer components {")
+	if componentsStart == -1 {
+		t.Fatal("source stylesheet does not contain a components layer")
+	}
+	components := source[componentsStart:]
+	for _, selector := range []string{
+		`.button,
+  button:not(.btn) {`,
+		`.button:not([aria-disabled="true"]):not([aria-busy="true"]):hover,
+  button:not(.btn):not(:disabled):hover {`,
+		`.button:not([aria-disabled="true"]):not([aria-busy="true"]):active,
+  button:not(.btn):not(:disabled):active {`,
+	} {
+		if !strings.Contains(components, selector) {
+			t.Errorf("legacy native button appearance must exclude Tabler .btn controls; missing %q", selector)
+		}
+	}
+	for _, shared := range []string{`button:disabled,`, `button[aria-busy="true"],`, `button[data-loading-label]::after,`, `button[data-loading-label][aria-busy="true"]::after,`} {
+		if !strings.Contains(components, shared) {
+			t.Errorf("shared button behavior must continue to cover Tabler button elements; missing %q", shared)
+		}
+	}
+
+	generated := readStaticSource(t, "app.css")
+	if !strings.Contains(generated, `.button,button:not(.btn){min-height:`) {
+		t.Error("generated legacy button rule does not exclude Tabler .btn controls")
 	}
 }
 
@@ -1066,8 +1120,9 @@ func TestFormsUseTablerValidation(t *testing.T) {
 	}
 
 	accountSource := readTemplateSource(t, "account_form.html")
-	if !strings.Contains(accountSource, `class="btn btn-outline-secondary password-toggle"`) || !strings.Contains(accountSource, `>显示</button>`) {
-		t.Error("password toggle must use a Tabler button while retaining text-only content for the textContent enhancement")
+	toggle := `class="btn btn-outline-secondary password-toggle" type="button" data-password-toggle aria-controls="secret-access-key" aria-pressed="false" hidden>显示</button>`
+	if !strings.Contains(accountSource, toggle) {
+		t.Error("password toggle must start hidden and retain text-only content for progressive enhancement")
 	}
 }
 

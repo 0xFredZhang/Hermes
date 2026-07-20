@@ -12,6 +12,7 @@
       toggle.setAttribute("aria-pressed", String(!showing));
       input.focus();
     });
+    toggle.hidden = false;
   });
 
   window.filterSelectOptions = (input) => {
