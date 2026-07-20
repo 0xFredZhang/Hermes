@@ -73,12 +73,7 @@
 <tr>
   <td data-label="Job"><span class="job-id">#{{.ID}}</span></td>
   <td data-label="操作"><span class="job-action">{{.ActionLabel}}</span></td>
-  <td data-label="状态">
-    {{if eq .StatusTone "active"}}<span class="badge bg-blue-lt text-blue status-badge">{{.StatusLabel}}</span>
-    {{else if eq .StatusTone "success"}}<span class="badge bg-green-lt text-green status-badge">{{.StatusLabel}}</span>
-    {{else if eq .StatusTone "danger"}}<span class="badge bg-red-lt text-red status-badge">{{.StatusLabel}}</span>
-    {{else}}<span class="badge bg-secondary-lt text-secondary status-badge">{{.StatusLabel}}</span>{{end}}
-  </td>
+  <td data-label="状态"><span class="badge status-{{.StatusTone}}">{{.StatusLabel}}</span></td>
   <td data-label="时间">
     <dl class="job-times">
       <div><dt>排队时间</dt><dd>{{.QueuedAt}}</dd></div>
@@ -106,18 +101,18 @@
 {{end}}
 
 {{define "environment_status_badge"}}
-{{if eq . "pending"}}<span class="badge bg-secondary-lt text-secondary status-badge">待预演</span>
-{{else if eq . "previewing"}}<span class="badge bg-blue-lt text-blue status-badge">预演中</span>
-{{else if eq . "preview_ready"}}<span class="badge bg-yellow-lt text-yellow status-badge">预演就绪</span>
-{{else if eq . "provisioning"}}<span class="badge bg-blue-lt text-blue status-badge">创建中</span>
-{{else if eq . "up"}}<span class="badge bg-green-lt text-green status-badge">运行中</span>
-{{else if eq . "refreshing"}}<span class="badge bg-blue-lt text-blue status-badge">漂移检测中</span>
-{{else if eq . "destroy_previewing"}}<span class="badge bg-yellow-lt text-yellow status-badge">销毁预演中</span>
-{{else if eq . "destroy_preview_ready"}}<span class="badge bg-yellow-lt text-yellow status-badge">待确认销毁</span>
-{{else if eq . "destroying"}}<span class="badge bg-blue-lt text-blue status-badge">销毁中</span>
-{{else if eq . "failed"}}<span class="badge bg-red-lt text-red status-badge">失败</span>
-{{else if eq . "destroyed"}}<span class="badge bg-secondary-lt text-secondary status-badge">已销毁</span>
-{{else}}<span class="badge bg-secondary-lt text-secondary status-badge long-value">{{.}}</span>{{end}}
+{{if eq . "pending"}}<span class="badge status-neutral">待预演</span>
+{{else if eq . "previewing"}}<span class="badge status-active">预演中</span>
+{{else if eq . "preview_ready"}}<span class="badge status-warning">预演就绪</span>
+{{else if eq . "provisioning"}}<span class="badge status-active">创建中</span>
+{{else if eq . "up"}}<span class="badge status-success">运行中</span>
+{{else if eq . "refreshing"}}<span class="badge status-active">漂移检测中</span>
+{{else if eq . "destroy_previewing"}}<span class="badge status-warning">销毁预演中</span>
+{{else if eq . "destroy_preview_ready"}}<span class="badge status-warning">待确认销毁</span>
+{{else if eq . "destroying"}}<span class="badge status-active">销毁中</span>
+{{else if eq . "failed"}}<span class="badge status-danger">失败</span>
+{{else if eq . "destroyed"}}<span class="badge status-neutral">已销毁</span>
+{{else}}<span class="badge status-neutral long-value">{{.}}</span>{{end}}
 {{end}}
 
 {{define "env_status"}}

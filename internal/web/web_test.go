@@ -50,7 +50,7 @@ func TestTablerAssetsAreEmbedded(t *testing.T) {
 		`@media (max-width:39.999rem){.resource-list-card .card-header{flex-direction:column`, `.responsive-table-wrap{border:0`,
 		`@media (prefers-reduced-motion:reduce)`, `button[data-loading-label][aria-busy=true]:after`,
 		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
-		`.job-history-wrap`, `.status-badge`, `.diagnostic-grid`, `.log-panel{max-height:420px`, `.log-panel-full{max-height:70vh`, `.copy-log-status`,
+		`.job-history-wrap`, `.badge.status-active`, `.diagnostic-grid`, `.log-panel{max-height:420px`, `.log-panel-full{max-height:70vh`, `.copy-log-status`,
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Fatalf("static app stylesheet missing %q", want)
@@ -83,6 +83,49 @@ func TestTablerSidebarCollapseVisibilityIsSafe(t *testing.T) {
 	}
 	if strings.Contains(css, `.collapse{visibility:collapse}`) {
 		t.Fatal("Tailwind visibility utility overrides Tabler's sidebar collapse visibility")
+	}
+}
+
+func TestHermesLinkOverridesPreserveTablerButtonSemantics(t *testing.T) {
+	sourceBytes, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read source stylesheet: %v", err)
+	}
+	source := string(sourceBytes)
+	baseStart := strings.Index(source, "@layer base {")
+	componentsStart := strings.Index(source, "@layer components {")
+	if baseStart == -1 || componentsStart <= baseStart {
+		t.Fatal("source stylesheet does not contain ordered base and components layers")
+	}
+	baseLayer := source[baseStart:componentsStart]
+	linkSelector := `a:not(.btn):not(.nav-link):not(.navbar-brand):not(.auth-brand):not(.button):not(.button-primary):not(.button-danger):not(.button-muted)`
+	for _, selector := range []string{linkSelector + " {", linkSelector + ":hover {", linkSelector + ":active {"} {
+		if !strings.Contains(baseLayer, selector) {
+			t.Errorf("Hermes base link rule must exclude Tabler navigation and button-like links; missing %q", selector)
+		}
+	}
+	if regexp.MustCompile(`(?m)^\s+a(?::(?:hover|active))?\s*\{`).MatchString(baseLayer) {
+		t.Error("Hermes base layer still contains an unscoped anchor color rule")
+	}
+
+	generated := readStaticSource(t, "app.css")
+	minifiedSelector := strings.ReplaceAll(linkSelector, " ", "")
+	for _, want := range []string{
+		minifiedSelector + `{color:var(--color-console-primary)`,
+		minifiedSelector + `:hover{color:var(--color-console-primary-strong);text-underline-offset:3px;text-decoration:underline`,
+	} {
+		if !strings.Contains(generated, want) {
+			t.Errorf("generated stylesheet is missing scoped Hermes link rule %q", want)
+		}
+	}
+
+	for name, pattern := range map[string]*regexp.Regexp{
+		"primary":        regexp.MustCompile(`\.btn-primary\{[^}]*--tblr-btn-color:var\(--tblr-primary-fg,#fff\)[^}]*--tblr-btn-bg:var\(--tblr-primary\)[^}]*--tblr-btn-hover-color:var\(--tblr-primary-fg\)[^}]*--tblr-btn-hover-bg:var\(--tblr-primary-darken\)`),
+		"outline danger": regexp.MustCompile(`\.btn-outline-danger,[^{]*\{[^}]*--tblr-btn-color:var\(--tblr-danger\)[^}]*--tblr-btn-bg:transparent[^}]*--tblr-btn-hover-color:var\(--tblr-danger-fg\)[^}]*--tblr-btn-hover-bg:var\(--tblr-danger\)`),
+	} {
+		if !pattern.MatchString(generated) {
+			t.Errorf("generated Tabler %s button rule does not preserve contrasting foreground and hover colors", name)
+		}
 	}
 }
 
@@ -592,7 +635,7 @@ func TestTablesHaveCaptionsAndScopedHeaders(t *testing.T) {
 			t.Errorf("rendered environment table missing %q", want)
 		}
 	}
-	runningBadge := requireTagWithClassTokens(t, body, "span", "badge", "bg-green-lt", "text-green", "status-badge")
+	runningBadge := requireTagWithClassTokens(t, body, "span", "badge", "status-success")
 	if !strings.Contains(body[strings.Index(body, runningBadge):], ">运行中</span>") {
 		t.Error("rendered environment table status badge is missing visible text 运行中")
 	}
@@ -625,9 +668,15 @@ func TestTablesHaveCaptionsAndScopedHeaders(t *testing.T) {
 }
 
 func TestListPagesUseTablerTables(t *testing.T) {
+	type expectedAction struct {
+		href  string
+		label string
+		icon  string
+	}
 	fixtures := []struct {
-		name string
-		body string
+		name    string
+		body    string
+		actions []expectedAction
 	}{
 		{
 			name: "accounts",
@@ -637,12 +686,20 @@ func TestListPagesUseTablerTables(t *testing.T) {
 					"AWSAccountID": "123456789012", "ARN": "arn:aws:iam::123456789012:user/ops",
 				}},
 			}),
+			actions: []expectedAction{
+				{href: "/accounts/new", label: "添加账号", icon: "ti-plus"},
+				{href: "/accounts/1/delete", label: "删除", icon: "ti-trash"},
+			},
 		},
 		{
 			name: "projects",
 			body: renderPageBody(t, "projects", map[string]any{
 				"Projects": []map[string]any{{"ID": int64(2), "Name": "console", "Description": "operations UI"}},
 			}),
+			actions: []expectedAction{
+				{href: "/projects/new", label: "新建项目", icon: "ti-plus"},
+				{href: "/projects/2/delete", label: "删除", icon: "ti-trash"},
+			},
 		},
 		{
 			name: "blueprints",
@@ -653,6 +710,13 @@ func TestListPagesUseTablerTables(t *testing.T) {
 					},
 				}},
 			}),
+			actions: []expectedAction{
+				{href: "/blueprints/new", label: "新建蓝图", icon: "ti-plus"},
+				{href: "/blueprints/3/edit", label: "编辑", icon: "ti-pencil"},
+				{href: "/blueprints/3/duplicate", label: "复制", icon: "ti-copy"},
+				{href: "/blueprints/3/deploy", label: "部署", icon: "ti-rocket"},
+				{href: "/blueprints/3/delete", label: "删除", icon: "ti-trash"},
+			},
 		},
 		{
 			name: "environments",
@@ -662,6 +726,7 @@ func TestListPagesUseTablerTables(t *testing.T) {
 					"Region": "ap-southeast-1", "Status": "up",
 				}},
 			}),
+			actions: []expectedAction{{href: "/environments/4", label: "查看详情", icon: "ti-eye"}},
 		},
 	}
 
@@ -670,39 +735,26 @@ func TestListPagesUseTablerTables(t *testing.T) {
 			requireTagWithClassTokens(t, fixture.body, "section", "card")
 			requireTagWithClassTokens(t, fixture.body, "div", "table-responsive")
 			requireTagWithClassTokens(t, fixture.body, "table", "table", "table-vcenter")
-			requireTagWithClassTokens(t, fixture.body, "a", "btn")
-			for _, action := range tagsWithClassTokens(fixture.body, "a", "btn") {
-				if !strings.Contains(action, `class="`) {
-					t.Fatalf("Tabler action has no class attribute: %s", action)
-				}
+			for _, action := range fixture.actions {
+				requireTablerActionLink(t, fixture.body, action.href, action.label, action.icon)
 			}
 		})
 	}
-
-	blueprints := fixtures[2].body
-	requireTagWithClassTokens(t, blueprints, "div", "btn-list")
-	for _, iconClass := range []string{"ti-pencil", "ti-copy", "ti-rocket", "ti-trash"} {
-		requireTagWithClassTokens(t, blueprints, "i", "ti", iconClass)
-	}
-	for _, label := range []string{"编辑", "复制", "部署", "删除"} {
-		if !strings.Contains(blueprints, ">"+label+"</a>") && !strings.Contains(blueprints, ">"+label+"</span>") {
-			t.Errorf("blueprint Tabler action is missing visible text %q", label)
-		}
-	}
+	requireTagWithClassTokens(t, fixtures[2].body, "div", "btn-list")
 }
 
 func TestStatusBadgesUseTablerTonesAndText(t *testing.T) {
 	for _, tc := range []struct {
 		status string
 		label  string
-		tone   []string
+		tone   string
 	}{
-		{status: "pending", label: "待预演", tone: []string{"bg-secondary-lt", "text-secondary"}},
-		{status: "previewing", label: "预演中", tone: []string{"bg-blue-lt", "text-blue"}},
-		{status: "preview_ready", label: "预演就绪", tone: []string{"bg-yellow-lt", "text-yellow"}},
-		{status: "up", label: "运行中", tone: []string{"bg-green-lt", "text-green"}},
-		{status: "failed", label: "失败", tone: []string{"bg-red-lt", "text-red"}},
-		{status: "destroyed", label: "已销毁", tone: []string{"bg-secondary-lt", "text-secondary"}},
+		{status: "pending", label: "待预演", tone: "status-neutral"},
+		{status: "previewing", label: "预演中", tone: "status-active"},
+		{status: "preview_ready", label: "预演就绪", tone: "status-warning"},
+		{status: "up", label: "运行中", tone: "status-success"},
+		{status: "failed", label: "失败", tone: "status-danger"},
+		{status: "destroyed", label: "已销毁", tone: "status-neutral"},
 	} {
 		t.Run(tc.status, func(t *testing.T) {
 			var body bytes.Buffer
@@ -711,13 +763,20 @@ func TestStatusBadgesUseTablerTonesAndText(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("RenderPartial env_status: %v", err)
 			}
-			badge := requireTagWithClassTokens(t, body.String(), "span", append([]string{"badge"}, tc.tone...)...)
+			badge := requireTagWithClassTokens(t, body.String(), "span", "badge", tc.tone)
 			badgeStart := strings.Index(body.String(), badge)
 			badgeEnd := strings.Index(body.String()[badgeStart:], "</span>")
 			if badgeEnd == -1 || !strings.Contains(body.String()[badgeStart:badgeStart+badgeEnd], tc.label) {
 				t.Errorf("status %q badge does not include visible label %q: %s", tc.status, tc.label, body.String())
 			}
 		})
+	}
+	fragments := readTemplateSource(t, "_fragments.html")
+	if !strings.Contains(fragments, `class="badge status-{{.StatusTone}}"`) {
+		t.Error("job rows must map the existing semantic tone directly onto the shared badge system")
+	}
+	if regexp.MustCompile(`class="badge[^"]*(?:\bbg-(?:blue|green|red|yellow|secondary)-lt\b|\btext-(?:blue|green|red|yellow|secondary)\b)[^"]*"`).MatchString(fragments) {
+		t.Error("status markup bypasses the AA-safe Hermes semantic badge palette")
 	}
 
 	var history bytes.Buffer
@@ -730,11 +789,35 @@ func TestStatusBadgesUseTablerTonesAndText(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RenderPartial job_history: %v", err)
 	}
-	requireTagWithClassTokens(t, history.String(), "span", "badge", "bg-blue-lt", "text-blue")
-	requireTagWithClassTokens(t, history.String(), "span", "badge", "bg-green-lt", "text-green")
+	requireTagWithClassTokens(t, history.String(), "span", "badge", "status-active")
+	requireTagWithClassTokens(t, history.String(), "span", "badge", "status-success")
 	for _, label := range []string{"执行中", "成功"} {
 		if !strings.Contains(history.String(), ">"+label+"</span>") {
 			t.Errorf("job status badge is missing visible text %q", label)
+		}
+	}
+}
+
+func TestStatusBadgePaletteMeetsWCAGAA(t *testing.T) {
+	css := readStaticSource(t, "app.css")
+	for _, tc := range []struct {
+		tone       string
+		foreground string
+		background string
+	}{
+		{tone: "active", foreground: "console-primary-strong", background: "console-primary-soft"},
+		{tone: "success", foreground: "console-success", background: "console-success-soft"},
+		{tone: "danger", foreground: "console-danger", background: "console-danger-soft"},
+		{tone: "neutral", foreground: "console-muted", background: "console-subtle"},
+		{tone: "warning", foreground: "console-warning", background: "console-warning-soft"},
+	} {
+		if !strings.Contains(css, `.badge.status-`+tc.tone+`{`) {
+			t.Errorf("generated stylesheet is missing the unified badge selector for %s", tc.tone)
+		}
+		foreground := cssHexToken(t, css, tc.foreground)
+		background := cssHexToken(t, css, tc.background)
+		if ratio := contrastRatio(foreground, background); ratio < 4.5 {
+			t.Errorf("%s badge contrast = %.3f:1, want >= 4.5:1", tc.tone, ratio)
 		}
 	}
 }
@@ -843,12 +926,13 @@ func TestStatusBadgesIncludeText(t *testing.T) {
 	for _, tc := range []struct {
 		status string
 		label  string
+		tone   string
 	}{
-		{"pending", "待预演"},
-		{"previewing", "预演中"},
-		{"up", "运行中"},
-		{"failed", "失败"},
-		{"destroyed", "已销毁"},
+		{"pending", "待预演", "status-neutral"},
+		{"previewing", "预演中", "status-active"},
+		{"up", "运行中", "status-success"},
+		{"failed", "失败", "status-danger"},
+		{"destroyed", "已销毁", "status-neutral"},
 	} {
 		t.Run(tc.status, func(t *testing.T) {
 			var body bytes.Buffer
@@ -859,7 +943,7 @@ func TestStatusBadgesIncludeText(t *testing.T) {
 				t.Fatalf("RenderPartial env_status: %v", err)
 			}
 			output := body.String()
-			badge := requireTagWithClassTokens(t, output, "span", "badge", "status-badge")
+			badge := requireTagWithClassTokens(t, output, "span", "badge", tc.tone)
 			badgeStart := strings.Index(output, badge)
 			badgeEnd := strings.Index(output[badgeStart:], "</span>")
 			if badgeEnd == -1 || !strings.Contains(output[badgeStart:badgeStart+badgeEnd], tc.label) {
@@ -1188,6 +1272,29 @@ func requireTagWithClassTokens(t *testing.T, body, tagName string, required ...s
 		t.Fatalf("rendered HTML has no <%s> with class tokens %q", tagName, required)
 	}
 	return tags[0]
+}
+
+func requireTablerActionLink(t *testing.T, body, href, visibleLabel, iconClass string) string {
+	t.Helper()
+	pattern := regexp.MustCompile(`(?is)<a\b[^>]*\bhref="` + regexp.QuoteMeta(href) + `"[^>]*>.*?</a>`)
+	action := pattern.FindString(body)
+	if action == "" {
+		t.Fatalf("rendered HTML has no action link with href %q", href)
+	}
+	startTags := htmlStartTags(action, "a")
+	if len(startTags) != 1 {
+		t.Fatalf("action link %q has %d start tags, want 1: %s", href, len(startTags), action)
+	}
+	requireClassTokens(t, startTags[0], "btn")
+	icon := requireTagWithClassTokens(t, action, "i", "ti", iconClass)
+	if got := htmlAttribute(t, icon, "aria-hidden"); got != "true" {
+		t.Errorf("action link %q decorative icon aria-hidden = %q, want true", href, got)
+	}
+	visibleText := strings.TrimSpace(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(action, ""))
+	if !strings.Contains(visibleText, visibleLabel) {
+		t.Errorf("action link %q visible text = %q, want label %q", href, visibleText, visibleLabel)
+	}
+	return action
 }
 
 func tagsWithClassTokens(body, tagName string, required ...string) []string {

@@ -52,19 +52,19 @@
     line-height: 1.5;
   }
 
-  a {
+  a:not(.btn):not(.nav-link):not(.navbar-brand):not(.auth-brand):not(.button):not(.button-primary):not(.button-danger):not(.button-muted) {
     color: var(--color-console-primary);
     text-decoration: none;
     transition: color 160ms cubic-bezier(0.25, 1, 0.5, 1);
   }
 
-  a:hover {
+  a:not(.btn):not(.nav-link):not(.navbar-brand):not(.auth-brand):not(.button):not(.button-primary):not(.button-danger):not(.button-muted):hover {
     color: var(--color-console-primary-strong);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
 
-  a:active {
+  a:not(.btn):not(.nav-link):not(.navbar-brand):not(.auth-brand):not(.button):not(.button-primary):not(.button-danger):not(.button-muted):active {
     color: var(--color-console-primary-strong);
   }
 
@@ -578,27 +578,23 @@
     @apply font-medium text-console-ink;
   }
 
-  .status-badge {
-    @apply inline-flex min-h-7 items-center rounded-md border px-2 py-1 text-xs font-semibold;
-  }
-
-  .status-active {
+  .badge.status-active {
     @apply border-console-primary bg-console-primary-soft text-console-primary-strong;
   }
 
-  .status-success {
+  .badge.status-success {
     @apply border-console-success bg-console-success-soft text-console-success;
   }
 
-  .status-danger {
+  .badge.status-danger {
     @apply border-console-danger bg-console-danger-soft text-console-danger;
   }
 
-  .status-neutral {
+  .badge.status-neutral {
     @apply border-console-border bg-console-subtle text-console-muted;
   }
 
-  .status-warning {
+  .badge.status-warning {
     @apply border-console-warning bg-console-warning-soft text-console-warning;
   }
 
