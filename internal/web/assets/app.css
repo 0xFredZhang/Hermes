@@ -460,11 +460,15 @@
   }
 
   .output-grid {
-    @apply grid gap-3 md:grid-cols-2 xl:grid-cols-3;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0 2rem;
   }
 
   .output-section {
-    @apply min-w-0 rounded-md border border-console-border bg-console-surface p-3;
+    min-width: 0;
+    padding-block: 1rem;
+    border-top: 1px solid var(--color-console-border);
   }
 
   .output-title {
@@ -600,12 +604,21 @@
     font-size: 1rem;
   }
 
+  .workflow-form .form-select {
+    min-height: 44px;
+    margin-top: 0;
+    border-color: var(--color-console-border-strong);
+    color: var(--color-console-ink);
+    font-size: 1rem;
+  }
+
   .workflow-form textarea.form-control {
     min-height: 7rem;
     resize: vertical;
   }
 
-  .workflow-form .form-control.is-invalid {
+  .workflow-form .form-control.is-invalid,
+  .workflow-form .form-select.is-invalid {
     border-color: var(--color-console-danger);
   }
 
@@ -623,6 +636,105 @@
 
   .workflow-form .password-control {
     margin-top: 0;
+  }
+
+  .blueprint-editor-card {
+    max-width: 72rem;
+  }
+
+  .blueprint-editor-form .card-body {
+    padding-block: 0.5rem;
+  }
+
+  .blueprint-section {
+    min-width: 0;
+    margin: 0;
+    padding: 1.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-console-border);
+  }
+
+  .blueprint-section:first-of-type {
+    border-top: 0;
+  }
+
+  .blueprint-section-title {
+    width: 100%;
+    margin: 0 0 1rem;
+    padding: 0;
+    color: var(--color-console-ink);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .blueprint-field {
+    min-width: 0;
+  }
+
+  .blueprint-editor-form .form-grid {
+    align-items: start;
+  }
+
+  .blueprint-editor-form .select-filters {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 6px;
+    background: var(--color-console-subtle);
+  }
+
+  .blueprint-editor-form .select-search {
+    margin: 0;
+  }
+
+  .blueprint-editor-form .form-check {
+    display: flex;
+    min-height: 44px;
+    margin: 0 0 1rem;
+    padding-left: 0;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .blueprint-editor-form .form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    flex: 0 0 1.25rem;
+    border-color: var(--color-console-border-strong);
+  }
+
+  .blueprint-editor-form .form-check-label {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    color: var(--color-console-ink);
+    cursor: pointer;
+  }
+
+  .blueprint-editor-form .checkbox-grid {
+    margin-bottom: 0;
+  }
+
+  .blueprint-section .disclosure-toggle {
+    justify-content: flex-start;
+    gap: 0.5rem;
+    color: var(--color-console-ink);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .blueprint-section .disclosure-toggle .ti {
+    transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .blueprint-section .disclosure-toggle[aria-expanded="true"] .ti {
+    transform: rotate(180deg);
+  }
+
+  .blueprint-section .disclosure-label {
+    font-size: 1rem;
+    font-weight: 600;
   }
 
   .description-grid {
@@ -650,6 +762,110 @@
     color: var(--color-console-ink);
     font-size: 0.9375rem;
     line-height: 1.5;
+  }
+
+  .operational-page {
+    width: 100%;
+    max-width: 72rem;
+  }
+
+  .operational-page-header {
+    align-items: flex-start;
+  }
+
+  .operational-card,
+  .operational-status-card {
+    margin-bottom: 1.5rem;
+    border-color: var(--color-console-border);
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  .operational-card-header,
+  .operational-status-header {
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .operational-card-header .section-title,
+  .operational-status-header .section-title {
+    margin: 0;
+  }
+
+  .operational-card-header .card-actions,
+  .operational-status-header .card-actions {
+    flex: 0 0 auto;
+  }
+
+  .operational-card .btn,
+  .operational-status-card .btn {
+    min-height: 44px;
+  }
+
+  .operational-status-body > .alert:first-child {
+    margin-top: 0;
+  }
+
+  .operational-actions {
+    margin-top: 1.25rem;
+  }
+
+  .operational-note {
+    margin-top: 1.25rem;
+    margin-bottom: 0;
+  }
+
+  .output-datagrid,
+  .credential-datagrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1rem;
+    margin: 0;
+  }
+
+  .output-datagrid .datagrid-item,
+  .credential-datagrid .datagrid-item {
+    min-width: 0;
+  }
+
+  .output-datagrid .datagrid-title,
+  .credential-datagrid .datagrid-title {
+    color: var(--color-console-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .output-datagrid .datagrid-content,
+  .credential-datagrid .datagrid-content {
+    margin-top: 0.25rem;
+    color: var(--color-console-ink);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .credential-target:not(:empty) {
+    margin-top: 1rem;
+  }
+
+  .credential-alert {
+    margin: 0;
+  }
+
+  .credential-alert .alert-title {
+    margin-bottom: 0.75rem;
+  }
+
+  .live-job-body .log-panel,
+  .job-log-card .log-panel {
+    width: 100%;
+    margin: 0;
+  }
+
+  .job-diagnostics-card .description-grid {
+    border: 0;
+    padding: 0;
   }
 
   .danger-alert {
@@ -1039,6 +1255,23 @@
 }
 
 @media (max-width: 39.999rem) {
+  .operational-card-header,
+  .operational-status-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operational-card-header .card-actions,
+  .operational-status-header .card-actions,
+  .copy-log-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .copy-log-actions .btn {
+    width: 100%;
+  }
+
   .workflow-card-header {
     align-items: stretch;
     flex-direction: column;

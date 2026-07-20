@@ -967,10 +967,10 @@ func TestFormsHaveExplicitLabelsAndErrorRegions(t *testing.T) {
 
 	body := renderPageBody(t, "blueprint_form", blueprintFormRenderData())
 	for _, want := range []string{
-		`<label class="field-label" for="blueprint-name">名称 *</label>`,
-		`<input id="blueprint-name" name="name" value="demo" required aria-invalid="true" aria-describedby="error-name">`,
-		`<span class="field-error" id="error-name" role="alert">名称不能为空</span>`,
-		`class="disclosure-toggle" hidden aria-expanded="true" data-enhanced-expanded="false" aria-controls="network-fields"`,
+		`<label class="form-label" for="blueprint-name">名称 *</label>`,
+		`<input class="form-control is-invalid" id="blueprint-name" name="name" value="demo" required aria-invalid="true" aria-describedby="error-name">`,
+		`<div class="invalid-feedback" id="error-name" role="alert">名称不能为空</div>`,
+		`class="btn disclosure-toggle" hidden aria-expanded="true" data-enhanced-expanded="false" aria-controls="network-fields"`,
 		`class="disclosure-label" data-disclosure-fallback>VPC</span>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -1006,6 +1006,365 @@ func TestFormsHaveExplicitLabelsAndErrorRegions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBlueprintEditorUsesTablerSections(t *testing.T) {
+	body := renderPageBody(t, "blueprint_form", blueprintFormRenderData())
+
+	t.Run("section hierarchy", func(t *testing.T) {
+		page := requireTagWithClassTokens(t, body, "section", "card", "page-panel", "workflow-card", "blueprint-editor-card")
+		if got := htmlAttribute(t, page, "aria-labelledby"); got != "blueprint-form-title" {
+			t.Errorf("blueprint editor aria-labelledby = %q, want blueprint-form-title", got)
+		}
+		requireTagWithClassTokens(t, body, "div", "card-header", "workflow-card-header")
+		requireTagWithClassTokens(t, body, "div", "card-body")
+		requireTagWithClassTokens(t, body, "form", "workflow-form", "blueprint-editor-form")
+
+		cards := tagsWithClassTokens(body, "*", "card")
+		if len(cards) != 1 {
+			t.Errorf("blueprint editor renders %d card surfaces, want one outer card and no nested cards: %v", len(cards), cards)
+		}
+
+		for _, section := range []string{"ownership", "compute", "network", "rds", "redis"} {
+			t.Run(section, func(t *testing.T) {
+				fieldset := requireTagWithAttribute(t, body, "fieldset", "data-blueprint-section", section)
+				requireClassTokens(t, fieldset, "blueprint-section")
+			})
+		}
+		if legends := tagsWithClassTokens(body, "legend", "blueprint-section-title"); len(legends) != 5 {
+			t.Errorf("Tabler blueprint section legends = %d, want 5", len(legends))
+		}
+	})
+
+	t.Run("controls and validation", func(t *testing.T) {
+		type controlContract struct {
+			tag, id, name, class, labelClass string
+		}
+		controls := []controlContract{
+			{tag: "input", id: "blueprint-name", name: "name", class: "form-control", labelClass: "form-label"},
+			{tag: "select", id: "blueprint-project", name: "project_id", class: "form-select", labelClass: "form-label"},
+			{tag: "select", id: "blueprint-account", name: "cloud_account_id", class: "form-select", labelClass: "form-label"},
+			{tag: "input", id: "region-search", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "instance-type-search", class: "form-control", labelClass: "form-label"},
+			{tag: "select", id: "region-select", name: "region", class: "form-select", labelClass: "form-label"},
+			{tag: "select", id: "instance-type-select", name: "instance_type", class: "form-select", labelClass: "form-label"},
+			{tag: "select", id: "ami-select", name: "ami", class: "form-select", labelClass: "form-label"},
+			{tag: "input", id: "instance-count", name: "count", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "root-volume-size", name: "root_volume_gb", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "key-pair-name", name: "key_name", class: "form-control", labelClass: "form-label"},
+			{tag: "select", id: "ingress-mode", name: "ingress_mode", class: "form-select", labelClass: "form-label"},
+			{tag: "input", id: "ingress-port", name: "ingress_port", class: "form-control", labelClass: "form-label"},
+			{tag: "select", id: "ingress-protocol", name: "ingress_protocol", class: "form-select", labelClass: "form-label"},
+			{tag: "input", id: "ingress-cidr", name: "ingress_cidr", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "network-enabled", name: "network_enabled", class: "form-check-input", labelClass: "form-check-label"},
+			{tag: "input", id: "network-vpc-cidr", name: "network_vpc_cidr", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "network-public-subnets", name: "network_public_subnet_cidrs", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "rds-enabled", name: "rds_enabled", class: "form-check-input", labelClass: "form-check-label"},
+			{tag: "input", id: "rds-engine-version", name: "rds_engine_version", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "rds-instance-class", name: "rds_instance_class", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "rds-storage", name: "rds_allocated_storage_gb", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "rds-db-name", name: "rds_db_name", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "rds-username", name: "rds_username", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "redis-enabled", name: "redis_enabled", class: "form-check-input", labelClass: "form-check-label"},
+			{tag: "input", id: "redis-auth-enabled", name: "redis_auth_enabled", class: "form-check-input", labelClass: "form-check-label"},
+			{tag: "input", id: "redis-engine-version", name: "redis_engine_version", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "redis-node-type", name: "redis_node_type", class: "form-control", labelClass: "form-label"},
+			{tag: "input", id: "redis-node-count", name: "redis_node_count", class: "form-control", labelClass: "form-label"},
+		}
+		for _, contract := range controls {
+			control := requireTagWithAttribute(t, body, contract.tag, "id", contract.id)
+			requireClassTokens(t, control, contract.class)
+			if contract.name != "" {
+				if got := htmlAttribute(t, control, "name"); got != contract.name {
+					t.Errorf("control %q name = %q, want %q", contract.id, got, contract.name)
+				}
+			}
+			requireTagWithClassTokensAndAttribute(t, body, "label", "for", contract.id, contract.labelClass)
+		}
+		if checks := tagsWithClassTokens(body, "div", "form-check"); len(checks) != 4 {
+			t.Errorf("Tabler form-check wrappers = %d, want 4", len(checks))
+		}
+
+		name := requireTagWithAttribute(t, body, "input", "id", "blueprint-name")
+		requireClassTokens(t, name, "form-control", "is-invalid")
+		if got := htmlAttribute(t, name, "aria-describedby"); got != "error-name" {
+			t.Errorf("invalid blueprint name aria-describedby = %q, want error-name", got)
+		}
+		errorTag := requireTagWithClassTokensAndAttribute(t, body, "div", "id", "error-name", "invalid-feedback")
+		if got := htmlAttribute(t, errorTag, "role"); got != "alert" {
+			t.Errorf("invalid feedback role = %q, want alert", got)
+		}
+	})
+
+	t.Run("metadata and hidden selection contracts", func(t *testing.T) {
+		for _, hint := range []struct {
+			key, name, value string
+		}{
+			{key: "region", name: "selected_region", value: "ap-southeast-1"},
+			{key: "instanceType", name: "selected_instance_type", value: "t3.micro"},
+			{key: "ami", name: "selected_ami", value: ""},
+		} {
+			input := requireTagWithAttribute(t, body, "input", "data-selection-hint", hint.key)
+			for attribute, want := range map[string]string{"type": "hidden", "name": hint.name, "value": hint.value} {
+				if got := htmlAttribute(t, input, attribute); got != want {
+					t.Errorf("selection hint %q %s = %q, want %q", hint.key, attribute, got, want)
+				}
+			}
+		}
+
+		for _, contract := range []struct {
+			id, source, get, trigger, target, include string
+		}{
+			{id: "blueprint-account", source: "account", get: "/blueprints/regions", trigger: "change, load", target: "#region-select", include: "[name='selected_region']"},
+			{id: "region-select", source: "region", get: "/blueprints/instance-types", trigger: "change", target: "#instance-type-select", include: "[name='cloud_account_id'],[name='region'],[name='selected_instance_type']"},
+			{id: "instance-type-select", source: "instanceType", get: "/blueprints/amis", trigger: "change", target: "#ami-select", include: "[name='cloud_account_id'],[name='region'],[name='instance_type'],[name='selected_ami']"},
+		} {
+			selectTag := requireTagWithAttribute(t, body, "select", "id", contract.id)
+			for attribute, want := range map[string]string{
+				"data-metadata-source": contract.source,
+				"hx-get":               contract.get,
+				"hx-trigger":           contract.trigger,
+				"hx-target":            contract.target,
+				"hx-swap":              "innerHTML",
+				"hx-include":           contract.include,
+			} {
+				if got := htmlAttribute(t, selectTag, attribute); got != want {
+					t.Errorf("metadata selector %q %s = %q, want %q", contract.id, attribute, got, want)
+				}
+			}
+		}
+
+		duplicateData := blueprintFormRenderData()
+		duplicateData["Mode"] = "duplicate"
+		duplicateData["SourceBlueprintID"] = int64(77)
+		duplicate := renderPageBody(t, "blueprint_form", duplicateData)
+		for _, want := range []string{
+			`<input type="hidden" name="blueprint_mode" value="duplicate">`,
+			`<input type="hidden" name="source_blueprint_id" value="77">`,
+		} {
+			if !strings.Contains(duplicate, want) {
+				t.Errorf("duplicate blueprint hidden contract missing %q", want)
+			}
+		}
+	})
+
+	t.Run("progressive disclosures and redis hooks", func(t *testing.T) {
+		for _, disclosure := range []struct {
+			label, target string
+		}{
+			{label: "VPC", target: "network-fields"},
+			{label: "MySQL", target: "rds-fields"},
+			{label: "Redis", target: "redis-fields"},
+		} {
+			toggle := requireTagWithClassTokensAndAttribute(t, body, "button", "aria-controls", disclosure.target, "btn", "disclosure-toggle")
+			for attribute, want := range map[string]string{"type": "button", "aria-expanded": "true", "data-enhanced-expanded": "false"} {
+				if got := htmlAttribute(t, toggle, attribute); got != want {
+					t.Errorf("%s disclosure %s = %q, want %q", disclosure.label, attribute, got, want)
+				}
+			}
+			if _, ok := htmlAttributeValue(toggle, "hidden"); !ok {
+				t.Errorf("%s enhanced disclosure toggle must start hidden", disclosure.label)
+			}
+			requireTagWithClassTokensAndAttribute(t, body, "span", "data-disclosure-fallback", "", "disclosure-label")
+			target := requireTagWithAttribute(t, body, "div", "id", disclosure.target)
+			if _, hidden := htmlAttributeValue(target, "hidden"); hidden {
+				t.Errorf("%s disclosure target is hidden before JavaScript enhancement", disclosure.label)
+			}
+		}
+		for _, hook := range []struct{ id, attribute string }{
+			{id: "redis-enabled", attribute: "data-redis-enabled"},
+			{id: "redis-auth-enabled", attribute: "data-redis-auth"},
+		} {
+			input := requireTagWithAttribute(t, body, "input", "id", hook.id)
+			if _, ok := htmlAttributeValue(input, hook.attribute); !ok {
+				t.Errorf("Redis control %q lost %s", hook.id, hook.attribute)
+			}
+		}
+	})
+}
+
+func TestOperationalPagesUseTablerComponents(t *testing.T) {
+	environmentData := map[string]any{
+		"PageTitle": "环境详情", "ActiveNav": "environments",
+		"Env":              map[string]any{"ID": int64(9), "Name": "staging", "PulumiStack": "staging-stack", "Status": "up"},
+		"CurrentJobActive": true, "StatusPolling": true, "HasActiveJobs": true,
+		"CurrentJobStreamURL": "/jobs/41/logs/stream",
+		"CurrentJob":          map[string]any{"ID": int64(41), "ActionLabel": "创建资源", "StatusLabel": "执行中"},
+		"Jobs": []map[string]any{{
+			"ID": int64(41), "ActionLabel": "创建资源", "StatusLabel": "执行中", "StatusTone": "active",
+			"QueuedAt": "10:00", "StartedAt": "10:01", "FinishedAt": "-", "Duration": "1m", "Summary": "1 个待创建",
+		}},
+		"PublicIPs": "203.0.113.10", "PublicDNS": "ec2.example.test",
+		"VPCID": "vpc-123", "SubnetIDs": "subnet-1, subnet-2",
+		"RDSEndpoint": "db.example.test:3306", "RDSAddress": "db.example.test", "RDSPort": "3306", "RDSUsername": "admin", "HasRDSSecret": true,
+		"RedisEndpoint": "redis.example.test", "RedisReader": "redis-ro.example.test", "RedisPort": "6379", "HasRedisSecret": true,
+		"RefreshPlan": "无漂移",
+	}
+	environment := renderPageBody(t, "environment_detail", environmentData)
+
+	t.Run("environment status outputs history and live log", func(t *testing.T) {
+		page := requireTagWithClassTokens(t, environment, "section", "operational-page", "environment-detail-page")
+		if got := htmlAttribute(t, page, "aria-labelledby"); got != "environment-detail-title" {
+			t.Errorf("environment page aria-labelledby = %q, want environment-detail-title", got)
+		}
+		requireTagWithClassTokens(t, environment, "header", "page-header", "operational-page-header")
+		requireTagWithClassTokensAndAttribute(t, environment, "h2", "id", "environment-detail-title", "page-title")
+
+		status := requireTagWithAttribute(t, environment, "div", "id", "status")
+		requireClassTokens(t, status, "card", "operational-status-card")
+		for attribute, want := range map[string]string{
+			"hx-get": "/environments/9/status", "hx-trigger": "every 2s", "hx-swap": "outerHTML",
+			"role": "region", "aria-label": "环境状态", "aria-live": "polite",
+		} {
+			if got := htmlAttribute(t, status, attribute); got != want {
+				t.Errorf("#status %s = %q, want %q", attribute, got, want)
+			}
+		}
+		requireTagWithClassTokens(t, environment, "div", "card-header", "operational-status-header")
+		requireTagWithClassTokens(t, environment, "div", "output-grid")
+		if outputs := tagsWithClassTokens(environment, "section", "output-section"); len(outputs) != 4 {
+			t.Errorf("operational output sections = %d, want 4", len(outputs))
+		}
+		if datagrids := tagsWithClassTokens(environment, "dl", "datagrid", "output-datagrid"); len(datagrids) != 4 {
+			t.Errorf("Tabler output datagrids = %d, want 4", len(datagrids))
+		}
+
+		for _, credential := range []struct {
+			kind, post, target string
+		}{
+			{kind: "rds", post: "/environments/9/rds-credentials", target: "#rds-credentials-9"},
+			{kind: "redis", post: "/environments/9/redis-credentials", target: "#redis-credentials-9"},
+		} {
+			button := requireTagWithAttribute(t, environment, "button", "hx-post", credential.post)
+			requireClassTokens(t, button, "btn", "btn-outline-secondary")
+			for attribute, want := range map[string]string{"type": "button", "hx-target": credential.target, "hx-swap": "innerHTML", "data-loading-label": "读取中…"} {
+				if got := htmlAttribute(t, button, attribute); got != want {
+					t.Errorf("%s credential button %s = %q, want %q", credential.kind, attribute, got, want)
+				}
+			}
+			requireTagWithAttribute(t, environment, "div", "id", strings.TrimPrefix(credential.target, "#"))
+		}
+
+		liveCard := requireTagWithClassTokens(t, environment, "section", "card", "operational-card", "live-job-card")
+		if got := htmlAttribute(t, liveCard, "aria-labelledby"); got != "live-job-title" {
+			t.Errorf("live job card aria-labelledby = %q, want live-job-title", got)
+		}
+		log := requireTagWithAttribute(t, environment, "pre", "id", "live-job-log")
+		requireClassTokens(t, log, "log-panel")
+		for attribute, want := range map[string]string{
+			"tabindex": "0", "data-job-stream-url": "/jobs/41/logs/stream",
+			"data-job-status-url": "/environments/9/status", "data-job-history-url": "/environments/9/jobs",
+		} {
+			if got := htmlAttribute(t, log, attribute); got != want {
+				t.Errorf("live log %s = %q, want %q", attribute, got, want)
+			}
+		}
+		liveBody := regexp.MustCompile(`(?s)<div class="card-body live-job-body">.*?</div>`).FindString(environment)
+		for _, want := range []string{`id="live-job-log"`, `data-job-stream-status`, `role="status"`, `aria-live="polite"`} {
+			if !strings.Contains(liveBody, want) {
+				t.Errorf("live log and announcement must remain siblings; missing %q: %s", want, liveBody)
+			}
+		}
+
+		history := requireTagWithAttribute(t, environment, "div", "id", "job-history")
+		requireClassTokens(t, history, "card", "job-history-card")
+		for attribute, want := range map[string]string{"hx-get": "/environments/9/jobs", "hx-trigger": "every 2s", "hx-swap": "outerHTML"} {
+			if got := htmlAttribute(t, history, attribute); got != want {
+				t.Errorf("#job-history %s = %q, want %q", attribute, got, want)
+			}
+		}
+		requireTagWithClassTokens(t, environment, "table", "table", "table-vcenter", "card-table", "job-history-table")
+		detail := requireTagWithAttribute(t, environment, "a", "id", "job-detail-41")
+		requireClassTokens(t, detail, "btn", "btn-outline-primary")
+		if got := htmlAttribute(t, detail, "href"); got != "/jobs/41" {
+			t.Errorf("#job-detail-41 href = %q, want /jobs/41", got)
+		}
+	})
+
+	t.Run("job diagnostics failure copy and bounded log", func(t *testing.T) {
+		job := renderPageBody(t, "job_detail", map[string]any{
+			"PageTitle": "Job 详情", "ActiveNav": "environments",
+			"Environment": map[string]any{"ID": int64(9), "Name": "staging"},
+			"Job": map[string]any{
+				"ID": int64(41), "Action": "up", "ActionLabel": "创建资源", "Status": "failed", "StatusLabel": "失败", "StatusTone": "danger",
+				"QueuedAt": "10:00", "StartedAt": "10:01", "FinishedAt": "10:02", "Duration": "1m", "Summary": "创建失败", "Error": "权限不足", "Active": false,
+			},
+			"Logs": "preview\nfailed",
+		})
+		page := requireTagWithClassTokens(t, job, "section", "operational-page", "job-detail-page")
+		if got := htmlAttribute(t, page, "aria-labelledby"); got != "job-detail-title" {
+			t.Errorf("job page aria-labelledby = %q, want job-detail-title", got)
+		}
+		requireTagWithClassTokens(t, job, "header", "page-header", "operational-page-header")
+		requireTagWithClassTokensAndAttribute(t, job, "h2", "id", "job-detail-title", "page-title")
+		requireTagWithClassTokens(t, job, "section", "card", "operational-card", "job-diagnostics-card")
+		requireTagWithClassTokens(t, job, "dl", "datagrid", "description-grid", "diagnostic-grid")
+		failure := requireTagWithClassTokens(t, job, "section", "alert", "alert-danger", "job-failure")
+		if got := htmlAttribute(t, failure, "role"); got != "alert" {
+			t.Errorf("job failure role = %q, want alert", got)
+		}
+		requireTagWithClassTokens(t, job, "section", "card", "operational-card", "job-log-card")
+
+		copyActions := regexp.MustCompile(`(?s)<div class="copy-log-actions">.*?</div>`).FindString(job)
+		copyButton := requireTagWithAttribute(t, copyActions, "button", "data-copy-log", "")
+		requireClassTokens(t, copyButton, "btn", "btn-outline-secondary")
+		for attribute, want := range map[string]string{
+			"type": "button", "data-copy-target": "job-log", "data-loading-label": "复制中…", "aria-controls": "job-log",
+		} {
+			if got := htmlAttribute(t, copyButton, attribute); got != want {
+				t.Errorf("copy button %s = %q, want %q", attribute, got, want)
+			}
+		}
+		if _, ok := htmlAttributeValue(copyButton, "hidden"); !ok {
+			t.Error("copy button must remain hidden until JavaScript enhancement")
+		}
+		for _, want := range []string{`data-copy-status`, `role="status"`, `aria-live="polite"`} {
+			if !strings.Contains(copyActions, want) {
+				t.Errorf("copy button and status must remain siblings; missing %q: %s", want, copyActions)
+			}
+		}
+		jobLog := requireTagWithAttribute(t, job, "pre", "id", "job-log")
+		requireClassTokens(t, jobLog, "log-panel", "log-panel-full")
+		if got := htmlAttribute(t, jobLog, "tabindex"); got != "0" {
+			t.Errorf("job log tabindex = %q, want 0", got)
+		}
+	})
+
+	t.Run("destructive and credential fragments", func(t *testing.T) {
+		var destroy bytes.Buffer
+		if err := newTestRenderer(t).RenderPartial(&destroy, "env_status", map[string]any{
+			"Env":         map[string]any{"ID": int64(9), "Name": "staging", "Status": "destroy_preview_ready"},
+			"DestroyPlan": "2 个待删除",
+		}); err != nil {
+			t.Fatalf("RenderPartial destroy status: %v", err)
+		}
+		form := requireTagWithAttribute(t, destroy.String(), "form", "action", "/environments/9/destroy")
+		if got := htmlAttribute(t, form, "data-confirm"); got != "确认销毁环境“staging”及其 AWS 资源？" {
+			t.Errorf("destroy confirmation = %q", got)
+		}
+		destroyButton := requireTagWithClassTokensAndAttribute(t, destroy.String(), "button", "data-loading-label", "销毁中…", "btn", "btn-danger")
+		if got := htmlAttribute(t, destroyButton, "type"); got != "submit" {
+			t.Errorf("destroy button type = %q, want submit", got)
+		}
+
+		for _, credential := range []struct {
+			partial string
+			data    map[string]any
+		}{
+			{partial: "rds_credentials", data: map[string]any{"Host": "db.example.test", "Port": "3306", "Username": "admin", "Password": "secret"}},
+			{partial: "redis_credentials", data: map[string]any{"Host": "redis.example.test", "Port": "6379", "Username": "default", "Token": "secret"}},
+		} {
+			var rendered bytes.Buffer
+			if err := newTestRenderer(t).RenderPartial(&rendered, credential.partial, credential.data); err != nil {
+				t.Fatalf("RenderPartial %s: %v", credential.partial, err)
+			}
+			alert := requireTagWithClassTokens(t, rendered.String(), "div", "alert", "alert-success", "credential-alert")
+			if got := htmlAttribute(t, alert, "role"); got != "status" {
+				t.Errorf("%s role = %q, want status", credential.partial, got)
+			}
+			requireTagWithClassTokens(t, rendered.String(), "dl", "datagrid", "credential-datagrid")
+		}
+	})
 }
 
 func TestFormsUseTablerValidation(t *testing.T) {

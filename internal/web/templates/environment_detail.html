@@ -1,29 +1,36 @@
 {{define "content"}}
-<section class="page-panel">
-  <a class="back-link" href="/environments">← 返回环境列表</a>
-  <div class="page-header">
-    <div>
-      <h2 class="page-title">环境:{{.Env.Name}} <span class="stack-label long-value">({{.Env.PulumiStack}})</span></h2>
+<section class="operational-page environment-detail-page" aria-labelledby="environment-detail-title">
+  <a class="back-link" href="/environments"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回环境列表</span></a>
+  <header class="page-header operational-page-header">
+    <div class="min-w-0">
+      <h2 class="page-title" id="environment-detail-title">环境:{{.Env.Name}} <span class="stack-label long-value">({{.Env.PulumiStack}})</span></h2>
       <p class="page-description">环境状态、资源输出与任务历史。</p>
     </div>
-  </div>
-  {{if .Error}}<p class="notice err">{{.Error}}</p>{{end}}
+  </header>
+  {{if .Error}}<div class="alert alert-danger" role="alert">{{.Error}}</div>{{end}}
+
   {{template "env_status" .}}
+
   {{if .CurrentJobActive}}
-  <section class="live-job-section" aria-labelledby="live-job-title">
-    <div class="section-heading">
-      <div>
-        <h3 class="section-title" id="live-job-title">实时日志</h3>
-        <p class="section-meta">Job #{{.CurrentJob.ID}} · {{.CurrentJob.ActionLabel}} · {{.CurrentJob.StatusLabel}}</p>
+  <section class="card operational-card live-job-card" aria-labelledby="live-job-title">
+    <div class="card-header operational-card-header">
+      <div class="min-w-0">
+        <h3 class="card-title section-title" id="live-job-title">实时日志</h3>
+        <p class="card-subtitle section-meta">Job #{{.CurrentJob.ID}} · {{.CurrentJob.ActionLabel}} · {{.CurrentJob.StatusLabel}}</p>
       </div>
-      <a class="button" href="/jobs/{{.CurrentJob.ID}}">查看任务详情</a>
+      <div class="card-actions">
+        <a class="btn btn-outline-primary" href="/jobs/{{.CurrentJob.ID}}"><i class="ti ti-eye icon" aria-hidden="true"></i><span>查看任务详情</span></a>
+      </div>
     </div>
-    <pre id="live-job-log" class="log-panel" tabindex="0" aria-label="Job #{{.CurrentJob.ID}} 实时日志" data-job-stream-url="{{.CurrentJobStreamURL}}" data-job-status-url="/environments/{{.Env.ID}}/status" data-job-history-url="/environments/{{.Env.ID}}/jobs"></pre>
-    <p class="job-stream-status" data-job-stream-status role="status" aria-live="polite"></p>
+    <div class="card-body live-job-body">
+      <pre id="live-job-log" class="log-panel" tabindex="0" aria-label="Job #{{.CurrentJob.ID}} 实时日志" data-job-stream-url="{{.CurrentJobStreamURL}}" data-job-status-url="/environments/{{.Env.ID}}/status" data-job-history-url="/environments/{{.Env.ID}}/jobs"></pre>
+      <p class="job-stream-status" data-job-stream-status role="status" aria-live="polite"></p>
+    </div>
   </section>
   {{end}}
-  <section class="job-history-section" aria-labelledby="job-history-title">
-    <div class="section-heading">
+
+  <section class="operational-section job-history-section" aria-labelledby="job-history-title">
+    <div class="section-heading operational-section-heading">
       <div>
         <h3 class="section-title" id="job-history-title">任务历史</h3>
         <p class="section-meta">最新任务在前。</p>

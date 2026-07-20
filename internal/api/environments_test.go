@@ -541,11 +541,14 @@ func TestTransientEnvironmentKeepsStatusPollingAfterTerminalJob(t *testing.T) {
 			setEnvironmentLifecycleState(t, d, envID, environmentStatus, "")
 
 			page := authedGet(t, d, "/environments/"+itoa(envID)).Body.String()
-			statusPoll := `id="status" hx-get="/environments/` + itoa(envID) + `/status" hx-trigger="every 2s"`
-			if !strings.Contains(page, statusPoll) {
-				t.Fatalf("transient environment %q stopped status polling after terminal Job: %s", environmentStatus, page)
+			statusTag := htmlTagContaining(t, page, `id="status"`)
+			for _, want := range []string{`hx-get="/environments/` + itoa(envID) + `/status"`, `hx-trigger="every 2s"`} {
+				if !strings.Contains(statusTag, want) {
+					t.Fatalf("transient environment %q stopped status polling; missing %q in %s", environmentStatus, want, statusTag)
+				}
 			}
-			if strings.Contains(page, `id="job-history" hx-get="/environments/`+itoa(envID)+`/jobs" hx-trigger`) {
+			historyTag := htmlTagContaining(t, page, `id="job-history"`)
+			if strings.Contains(historyTag, `hx-trigger=`) {
 				t.Fatalf("terminal-only history unexpectedly polls for %q: %s", environmentStatus, page)
 			}
 			if strings.Contains(page, `data-job-stream-url="/jobs/`+itoa(jobID)+`/logs/stream"`) {

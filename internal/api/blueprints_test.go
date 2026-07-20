@@ -550,14 +550,11 @@ func TestBlueprintFormHasLiveControls(t *testing.T) {
 		`hx-get="/blueprints/regions"`,
 		`hx-trigger="change, load"`,
 		`data-filter-select="#region-select"`,
-		`<select name="region" id="region-select" data-metadata-source="region" required`,
 		`hx-get="/blueprints/instance-types"`,
 		`hx-target="#instance-type-select"`,
 		`data-filter-select="#instance-type-select"`,
-		`<select name="instance_type" id="instance-type-select" data-metadata-source="instanceType" required`,
 		`t3.micro · 2C1G`,
 		`hx-get="/blueprints/amis"`,
-		`<select name="ami" id="ami-select">`,
 		`自动:最新 Ubuntu 26.04 LTS`,
 		`name="rds_enabled"`,
 		`name="rds_instance_class" value="db.t3.micro"`,
@@ -576,6 +573,23 @@ func TestBlueprintFormHasLiveControls(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("blueprint form missing %q", want)
 		}
+	}
+	for _, tc := range []struct {
+		id, name, source string
+	}{
+		{id: "region-select", name: "region", source: "region"},
+		{id: "instance-type-select", name: "instance_type", source: "instanceType"},
+	} {
+		tag := htmlTagContaining(t, body, `id="`+tc.id+`"`)
+		for _, want := range []string{`name="` + tc.name + `"`, `data-metadata-source="` + tc.source + `"`, `required`} {
+			if !strings.Contains(tag, want) {
+				t.Errorf("metadata select %q missing %q: %s", tc.id, want, tag)
+			}
+		}
+	}
+	ami := htmlTagContaining(t, body, `id="ami-select"`)
+	if !strings.Contains(ami, `name="ami"`) {
+		t.Errorf("AMI select lost its submitted name: %s", ami)
 	}
 	if strings.Contains(body, `name="network_map_public_ip_launch"`) {
 		t.Fatalf("blueprint form should keep map_public_ip_on_launch as an internal default")
@@ -804,11 +818,24 @@ func TestBlueprintFormUsesModeSpecificActionAndSubmitLabel(t *testing.T) {
 				t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 			}
 			body := rec.Body.String()
-			if !strings.Contains(body, `<form method="post" action="`+tc.action+`" novalidate>`) {
-				t.Fatalf("form action = %q, want %q; body=%s", htmlTagContaining(t, body, `<form method="post"`), tc.action, body)
+			formTag := htmlTagContaining(t, body, `action="`+tc.action+`"`)
+			for _, want := range []string{`method="post"`, `novalidate`} {
+				if !strings.Contains(formTag, want) {
+					t.Fatalf("form action tag missing %q for %q: %s", want, tc.action, formTag)
+				}
 			}
-			if !strings.Contains(body, `type="submit">`+tc.label+`</button>`) {
-				t.Fatalf("submit label missing %q: %s", tc.label, body)
+			buttonOpen := htmlTagContaining(t, body, `data-loading-label="保存中…"`)
+			buttonAt := strings.Index(body, buttonOpen)
+			if buttonAt < 0 {
+				t.Fatalf("submit button start missing for %q: %s", tc.label, body)
+			}
+			buttonEnd := strings.Index(body[buttonAt:], `</button>`)
+			if buttonEnd < 0 {
+				t.Fatalf("submit button body missing for %q: %s", tc.label, body)
+			}
+			button := body[buttonAt : buttonAt+buttonEnd+len(`</button>`)]
+			if !strings.Contains(button, `type="submit"`) || !strings.Contains(button, tc.label) {
+				t.Fatalf("submit button missing type or label %q: %s", tc.label, button)
 			}
 		})
 	}
@@ -822,7 +849,11 @@ func TestDuplicateBlueprintSourceIdentityIsSubmittedInsideForm(t *testing.T) {
 		t.Fatalf("CreateBlueprint: %v", err)
 	}
 	body := authedGet(t, d, "/blueprints/"+itoa(id)+"/duplicate").Body.String()
-	start := strings.Index(body, `<form method="post" action="/blueprints" novalidate>`)
+	formTag := htmlTagContaining(t, body, `action="/blueprints"`)
+	if !strings.Contains(formTag, `method="post"`) || !strings.Contains(formTag, `novalidate`) {
+		t.Fatalf("duplicate form has unexpected attributes: %s", formTag)
+	}
+	start := strings.Index(body, formTag)
 	if start < 0 {
 		t.Fatalf("duplicate form start not found: %s", body)
 	}

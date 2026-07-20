@@ -1,53 +1,59 @@
 {{define "content"}}
-<section class="page-panel">
-  <a class="back-link" href="/environments/{{.Environment.ID}}">← 返回环境 {{.Environment.Name}}</a>
-  <div class="page-header">
-    <div>
-      <h2 class="page-title">Job #{{.Job.ID}}</h2>
+<section class="operational-page job-detail-page" aria-labelledby="job-detail-title">
+  <a class="back-link" href="/environments/{{.Environment.ID}}"><i class="ti ti-arrow-left icon" aria-hidden="true"></i><span>返回环境 {{.Environment.Name}}</span></a>
+  <header class="page-header operational-page-header">
+    <div class="min-w-0">
+      <h2 class="page-title" id="job-detail-title">Job #{{.Job.ID}}</h2>
       <p class="page-description">{{.Job.ActionLabel}} · {{.Job.StatusLabel}}</p>
     </div>
     <span class="badge status-{{.Job.StatusTone}}">{{.Job.StatusLabel}}</span>
-  </div>
+  </header>
 
-  <section aria-labelledby="job-metadata-title">
-    <h3 class="section-title" id="job-metadata-title">任务信息</h3>
-    <dl class="summary-grid diagnostic-grid">
-      <div><dt>环境</dt><dd><a href="/environments/{{.Environment.ID}}">{{.Environment.Name}}</a></dd></div>
-      <div><dt>操作</dt><dd>{{.Job.ActionLabel}} <code class="raw-value long-value">{{.Job.Action}}</code></dd></div>
-      <div><dt>状态</dt><dd>{{.Job.StatusLabel}} <code class="raw-value long-value">{{.Job.Status}}</code></dd></div>
-      <div><dt>排队时间</dt><dd>{{.Job.QueuedAt}}</dd></div>
-      <div><dt>开始时间</dt><dd>{{.Job.StartedAt}}</dd></div>
-      <div><dt>结束时间</dt><dd>{{.Job.FinishedAt}}</dd></div>
-      <div><dt>耗时</dt><dd>{{.Job.Duration}}</dd></div>
-      <div><dt>变更摘要</dt><dd>{{if .Job.Summary}}{{.Job.Summary}}{{else}}暂无摘要{{end}}</dd></div>
-    </dl>
+  <section class="card operational-card job-diagnostics-card" aria-labelledby="job-metadata-title">
+    <div class="card-header operational-card-header">
+      <h3 class="card-title section-title" id="job-metadata-title">任务信息</h3>
+    </div>
+    <div class="card-body">
+      <dl class="datagrid description-grid diagnostic-grid" aria-label="任务诊断信息">
+        <div class="datagrid-item"><dt class="datagrid-title">环境</dt><dd class="datagrid-content"><a href="/environments/{{.Environment.ID}}">{{.Environment.Name}}</a></dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">操作</dt><dd class="datagrid-content">{{.Job.ActionLabel}} <code class="raw-value long-value">{{.Job.Action}}</code></dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">状态</dt><dd class="datagrid-content">{{.Job.StatusLabel}} <code class="raw-value long-value">{{.Job.Status}}</code></dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">排队时间</dt><dd class="datagrid-content">{{.Job.QueuedAt}}</dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">开始时间</dt><dd class="datagrid-content">{{.Job.StartedAt}}</dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">结束时间</dt><dd class="datagrid-content">{{.Job.FinishedAt}}</dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">耗时</dt><dd class="datagrid-content">{{.Job.Duration}}</dd></div>
+        <div class="datagrid-item"><dt class="datagrid-title">变更摘要</dt><dd class="datagrid-content">{{if .Job.Summary}}{{.Job.Summary}}{{else}}暂无摘要{{end}}</dd></div>
+      </dl>
+    </div>
   </section>
 
   {{if eq .Job.Status "failed"}}
-  <section class="notice err job-failure" role="alert" aria-labelledby="job-failure-title">
-    <h3 id="job-failure-title">{{.Job.ActionLabel}}失败</h3>
+  <section class="alert alert-danger job-failure" role="alert" aria-labelledby="job-failure-title">
+    <h3 class="alert-title" id="job-failure-title">{{.Job.ActionLabel}}失败</h3>
     <p>{{if .Job.Error}}{{.Job.Error}}{{else}}任务未记录具体错误。{{end}}</p>
-    <a href="/environments/{{.Environment.ID}}">返回环境并重试</a>
+    <a class="alert-link" href="/environments/{{.Environment.ID}}">返回环境并重试</a>
   </section>
   {{else if .Job.Error}}
-  <section class="notice err job-failure" role="alert" aria-labelledby="job-error-title">
-    <h3 id="job-error-title">任务错误</h3>
+  <section class="alert alert-danger job-failure" role="alert" aria-labelledby="job-error-title">
+    <h3 class="alert-title" id="job-error-title">任务错误</h3>
     <p>{{.Job.Error}}</p>
   </section>
   {{end}}
 
-  <section class="job-log-section" aria-labelledby="job-log-title">
-    <div class="section-heading">
-      <div>
-        <h3 class="section-title" id="job-log-title">完整日志</h3>
-        {{if .Job.Active}}<p class="section-meta">任务仍在执行；这里只显示当前持久化日志。</p>{{else}}<p class="section-meta">任务完成时持久化的日志快照。</p>{{end}}
+  <section class="card operational-card job-log-card" aria-labelledby="job-log-title">
+    <div class="card-header operational-card-header">
+      <div class="min-w-0">
+        <h3 class="card-title section-title" id="job-log-title">完整日志</h3>
+        {{if .Job.Active}}<p class="card-subtitle section-meta">任务仍在执行；这里只显示当前持久化日志。</p>{{else}}<p class="card-subtitle section-meta">任务完成时持久化的日志快照。</p>{{end}}
       </div>
       <div class="copy-log-actions">
-        <button type="button" hidden data-copy-log data-copy-target="job-log" data-loading-label="复制中…" aria-controls="job-log">复制日志</button>
+        <button class="btn btn-outline-secondary" type="button" hidden data-copy-log data-copy-target="job-log" data-loading-label="复制中…" aria-controls="job-log"><i class="ti ti-copy icon" aria-hidden="true"></i><span>复制日志</span></button>
         <span class="copy-log-status" data-copy-status role="status" aria-live="polite"></span>
       </div>
     </div>
-    <pre id="job-log" class="log-panel log-panel-full" tabindex="0">{{if .Logs}}{{.Logs}}{{else if .Job.Active}}暂无持久化日志。{{else}}未记录日志。{{end}}</pre>
+    <div class="card-body">
+      <pre id="job-log" class="log-panel log-panel-full" tabindex="0">{{if .Logs}}{{.Logs}}{{else if .Job.Active}}暂无持久化日志。{{else}}未记录日志。{{end}}</pre>
+    </div>
   </section>
 </section>
 {{end}}
