@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="card login-panel" aria-labelledby="login-title">
   <div class="card-body">
-    <h1 class="h2 text-center mb-2" id="login-title">登录</h1>
+    <h2 class="h2 text-center mb-2" id="login-title">登录</h2>
     <p class="text-secondary text-center mb-4">输入本地控制台口令。</p>
     {{if .Error}}<p class="notice err alert alert-danger" id="login-error" role="alert">{{.Error}}</p>{{end}}
     <form class="login-form" method="post" action="/login">

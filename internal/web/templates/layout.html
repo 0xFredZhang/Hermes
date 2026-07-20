@@ -17,21 +17,21 @@
   <main class="container container-tight py-4 auth-main" id="main-content" tabindex="-1">
     <a class="auth-brand" href="/login" aria-label="Hermes 登录">
       <i class="ti ti-cloud-lock" aria-hidden="true"></i>
-      <span>Hermes</span>
+      <h1 class="hermes-brand-title">Hermes</h1>
     </a>
     {{template "content" .}}
   </main>
   {{else}}
-  <aside class="navbar navbar-vertical navbar-expand-lg hermes-sidebar" aria-label="主导航">
+  <aside class="navbar navbar-vertical navbar-expand-lg hermes-sidebar">
     <div class="container-fluid">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#hermes-sidebar-menu" aria-controls="hermes-sidebar-menu" aria-expanded="false" aria-label="切换主导航">
         <span class="navbar-toggler-icon"></span>
       </button>
       <a class="navbar-brand navbar-brand-autodark" href="/accounts" aria-label="Hermes 账号首页">
         <i class="ti ti-cloud-lock hermes-brand-icon" aria-hidden="true"></i>
-        <span>Hermes</span>
+        <h1 class="hermes-brand-title">Hermes</h1>
       </a>
-      <div class="collapse navbar-collapse" id="hermes-sidebar-menu">
+      <nav class="collapse navbar-collapse" id="hermes-sidebar-menu" aria-label="主导航">
         <ul class="navbar-nav pt-lg-3">
           <li class="nav-item">
             <a class="nav-link{{if eq .ActiveNav "accounts"}} active{{end}}" href="/accounts"{{if eq .ActiveNav "accounts"}} aria-current="page"{{end}}>
@@ -58,7 +58,7 @@
             </a>
           </li>
         </ul>
-      </div>
+      </nav>
     </div>
   </aside>
   <div class="page-wrapper">

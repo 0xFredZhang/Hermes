@@ -200,7 +200,7 @@ func TestLayoutUsesTablerAdminShell(t *testing.T) {
 	if count := strings.Count(body, `id="`+target+`"`); count != 1 {
 		t.Errorf("mobile navigation collapse id %q count = %d, want 1", target, count)
 	}
-	requireTagWithClassTokensAndAttribute(t, body, "div", "id", target, "collapse", "navbar-collapse")
+	requireTagWithClassTokensAndAttribute(t, body, "nav", "id", target, "collapse", "navbar-collapse")
 
 	activeLink := requireTagWithClassTokensAndAttribute(t, body, "a", "href", "/accounts", "nav-link")
 	requireClassTokens(t, activeLink, "nav-link", "active")
@@ -242,6 +242,52 @@ func TestLayoutUsesTablerAdminShell(t *testing.T) {
 			t.Errorf("script %q loads out of order", path)
 		}
 		previous = position
+	}
+}
+
+func TestLayoutPrimaryLinksBelongToNavigationLandmark(t *testing.T) {
+	body := renderPageBody(t, "accounts", map[string]any{"ActiveNav": "accounts"})
+	navTag := requireTagWithAttribute(t, body, "nav", "aria-label", "主导航")
+	navStart := strings.Index(body, navTag)
+	navEnd := strings.Index(body[navStart:], "</nav>")
+	if navEnd == -1 {
+		t.Fatal("primary navigation landmark has no closing tag")
+	}
+	navigation := body[navStart : navStart+navEnd]
+	for _, route := range []string{"/accounts", "/projects", "/blueprints", "/environments"} {
+		if !strings.Contains(navigation, `href="`+route+`"`) {
+			t.Errorf("primary navigation landmark does not contain route %q", route)
+		}
+	}
+}
+
+func TestLayoutDocumentsUseCoherentHeadingHierarchy(t *testing.T) {
+	for _, fixture := range []struct {
+		name string
+		body string
+	}{
+		{"authenticated", renderPageBody(t, "accounts", map[string]any{"ActiveNav": "accounts"})},
+		{"login", renderPageBody(t, "login", map[string]any{"HideNav": true})},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			h1Tags := htmlStartTags(fixture.body, "h1")
+			if len(h1Tags) != 1 {
+				t.Fatalf("document h1 count = %d, want 1", len(h1Tags))
+			}
+			h1Start := strings.Index(fixture.body, h1Tags[0])
+			h1End := strings.Index(fixture.body[h1Start:], "</h1>")
+			if h1End == -1 || !strings.Contains(fixture.body[h1Start:h1Start+h1End], "Hermes") {
+				t.Fatal("document h1 does not identify Hermes")
+			}
+
+			h2Tags := htmlStartTags(fixture.body, "h2")
+			if len(h2Tags) == 0 {
+				t.Fatal("document has no page h2 below the Hermes h1")
+			}
+			if h2Start := strings.Index(fixture.body, h2Tags[0]); h2Start <= h1Start {
+				t.Error("page h2 must follow the Hermes h1 in document order")
+			}
+		})
 	}
 }
 

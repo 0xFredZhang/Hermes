@@ -676,6 +676,13 @@
     font-size: 1.5rem;
   }
 
+  .hermes-brand-title {
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+  }
+
   .hermes-sidebar .navbar-toggler {
     width: 44px;
     min-width: 44px;
