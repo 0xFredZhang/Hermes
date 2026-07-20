@@ -1,16 +1,18 @@
 {{define "content"}}
-<section class="page-panel" aria-labelledby="projects-title">
-  <div class="page-header">
+<section class="card page-panel resource-list-card" aria-labelledby="projects-title">
+  <div class="card-header">
     <div>
-      <h2 class="page-title" id="projects-title">项目</h2>
-      <p class="page-description">用项目组织相关蓝图和环境。</p>
+      <h2 class="card-title page-title" id="projects-title">项目</h2>
+      <p class="card-subtitle page-description">用项目组织相关蓝图和环境。</p>
     </div>
-    <a class="button button-primary" href="/projects/new">新建项目</a>
+    <div class="card-actions">
+      <a class="btn btn-primary" href="/projects/new"><i class="ti ti-plus icon" aria-hidden="true"></i><span>新建项目</span></a>
+    </div>
   </div>
   <div class="notice err" id="project-feedback" role="alert" aria-live="assertive" hidden></div>
   <div id="project-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden></div>
-  <div class="table-wrap responsive-table-wrap">
-    <table class="data-table responsive-table">
+  <div class="table-responsive responsive-table-wrap">
+    <table class="table table-vcenter card-table responsive-table">
       <caption class="sr-only">项目列表</caption>
       <thead><tr><th scope="col">名称</th><th scope="col">描述</th><th scope="col">操作</th></tr></thead>
       <tbody id="project-rows">{{template "project_rows" .Projects}}</tbody>

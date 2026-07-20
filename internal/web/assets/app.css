@@ -348,6 +348,7 @@
 
   button[aria-busy="true"],
   .button[aria-busy="true"],
+  .btn[aria-busy="true"],
   select[aria-busy="true"],
   input[aria-busy="true"] {
     cursor: progress;
@@ -362,7 +363,8 @@
   }
 
   button[data-loading-label]::after,
-  .button[data-loading-label]::after {
+  .button[data-loading-label]::after,
+  .btn[data-loading-label]::after {
     width: 1rem;
     height: 1rem;
     margin-left: 0.5rem;
@@ -375,7 +377,8 @@
   }
 
   button[data-loading-label][aria-busy="true"]::after,
-  .button[data-loading-label][aria-busy="true"]::after {
+  .button[data-loading-label][aria-busy="true"]::after,
+  .btn[data-loading-label][aria-busy="true"]::after {
     visibility: visible;
     animation: hermes-busy-spin 700ms linear infinite;
   }
@@ -477,10 +480,6 @@
     overflow-wrap: anywhere;
   }
 
-  .table-wrap {
-    @apply mt-4 max-w-full overflow-x-auto rounded-md border border-console-border-strong;
-  }
-
   .summary-grid {
     @apply grid gap-x-8 gap-y-4 border-y border-console-border py-4 sm:grid-cols-2 lg:grid-cols-3;
   }
@@ -510,27 +509,54 @@
     overflow-wrap: anywhere;
   }
 
-  .data-table {
-    @apply w-full border-collapse bg-console-surface text-left text-sm;
+  .resource-list-card,
+  .job-history-card {
+    border-color: var(--color-console-border);
+    box-shadow: none;
   }
 
-  .data-table th {
-    @apply border-b border-console-border-strong bg-console-subtle px-3 py-2 font-semibold text-console-muted;
+  .resource-list-card .card-header {
+    align-items: flex-start;
+    gap: 1rem;
   }
 
-  .data-table td {
-    @apply border-b border-console-border px-3 py-2 align-top text-console-ink;
+  .resource-list-card .card-title,
+  .resource-list-card .card-subtitle {
+    margin-inline: 0;
   }
 
-  .data-table tbody tr:last-child td {
-    @apply border-b-0;
+  .resource-list-card .card-actions {
+    flex-shrink: 0;
+  }
+
+  .resource-list-card > .notice {
+    margin: 1rem 1.25rem 0;
+  }
+
+  .resource-list-card .table,
+  .job-history-card .table {
+    --tblr-table-border-color: var(--color-console-border);
+  }
+
+  .resource-list-card .btn,
+  .job-history-card .btn {
+    min-height: 44px;
+  }
+
+  .resource-list-card .btn-list,
+  .job-history-card .btn-list {
+    align-items: center;
+  }
+
+  .empty-icon .ti {
+    font-size: 3rem;
   }
 
   .empty-row {
-    @apply px-3 py-6 text-center text-sm text-console-muted;
+    @apply p-0 text-center text-sm text-console-muted;
   }
 
-  .data-table a:not(.button),
+  .resource-list-card .table a:not(.btn),
   .empty-row a,
   .notice a,
   .summary-grid a {
@@ -842,6 +868,20 @@
 }
 
 @media (max-width: 39.999rem) {
+  .resource-list-card .card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resource-list-card .card-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .resource-list-card .card-actions .btn {
+    width: 100%;
+  }
+
   .responsive-table-wrap {
     border: 0;
     overflow: visible;
@@ -870,6 +910,7 @@
   .responsive-table tbody {
     display: grid;
     gap: 0.75rem;
+    padding: 0.75rem;
   }
 
   .responsive-table tbody tr {
@@ -884,6 +925,10 @@
     grid-template-columns: minmax(6.5rem, 38%) minmax(0, 1fr);
     gap: 0.75rem;
     overflow-wrap: anywhere;
+  }
+
+  .responsive-table td:last-child {
+    border-bottom: 0;
   }
 
   .responsive-table td::before {
@@ -901,8 +946,20 @@
   }
 }
 
+@media (min-width: 40rem) {
+  .resource-list-card th:last-child,
+  .job-history-card th:last-child {
+    text-align: right;
+  }
+
+  .resource-list-card td:last-child .btn-list,
+  .job-history-card td:last-child .btn-list {
+    justify-content: flex-end;
+  }
+}
+
 @media (hover: hover) {
-  .data-table tbody tr:hover td {
+  .responsive-table tbody tr:hover td {
     @apply bg-console-canvas;
   }
 }
@@ -918,7 +975,8 @@
   }
 
   button[data-loading-label][aria-busy="true"]::after,
-  .button[data-loading-label][aria-busy="true"]::after {
+  .button[data-loading-label][aria-busy="true"]::after,
+  .btn[data-loading-label][aria-busy="true"]::after {
     animation: none !important;
     border-style: dotted;
   }

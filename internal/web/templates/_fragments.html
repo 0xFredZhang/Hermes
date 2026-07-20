@@ -2,10 +2,22 @@
 {{range .}}
 <tr>
   <td data-label="名称" class="long-value">{{.Name}}</td><td data-label="描述" class="long-value">{{.Description}}</td>
-  <td data-label="操作"><a class="button button-danger" href="/projects/{{.ID}}/delete" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除项目“{{.Name}}”？" data-loading-label="删除中…">删除</a></td>
+  <td data-label="操作"><div class="btn-list"><a class="btn btn-outline-danger" href="/projects/{{.ID}}/delete" hx-delete="/projects/{{.ID}}" hx-target="#project-rows" hx-swap="innerHTML" hx-confirm="删除项目“{{.Name}}”？" data-loading-label="删除中…"><i class="ti ti-trash icon" aria-hidden="true"></i><span>删除</span></a></div></td>
 </tr>
 {{else}}
-<tr><td colspan="3" class="empty-row">暂无项目。确认已添加<a href="/accounts">AWS 云账号</a>，再<a href="/projects/new">新建项目</a>并继续创建蓝图。</td></tr>
+<tr><td colspan="3" class="empty-row">
+  <div class="empty">
+    <div class="empty-icon"><i class="ti ti-folders" aria-hidden="true"></i></div>
+    <p class="empty-title">暂无项目</p>
+    <p class="empty-subtitle text-secondary">确认已添加 AWS 云账号，再新建项目并继续创建蓝图。</p>
+    <div class="empty-action">
+      <div class="btn-list justify-content-center">
+        <a class="btn btn-outline-secondary" href="/accounts"><i class="ti ti-cloud-lock icon" aria-hidden="true"></i><span>查看 AWS 云账号</span></a>
+        <a class="btn btn-primary" href="/projects/new"><i class="ti ti-plus icon" aria-hidden="true"></i><span>新建项目</span></a>
+      </div>
+    </div>
+  </div>
+</td></tr>
 {{end}}
 {{end}}
 
@@ -14,23 +26,36 @@
 <tr>
   <td data-label="名称" class="long-value"><a class="long-value" href="/blueprints/{{.ID}}">{{.Name}}</a></td><td data-label="Region" class="long-value">{{.Params.Region}}</td><td data-label="规格×数量" class="long-value">{{.Params.EC2.InstanceType}} × {{.Params.EC2.Count}}</td>
   <td data-label="操作">
-    <div class="action-group">
-      <a class="button" href="/blueprints/{{.ID}}/edit">编辑</a>
-      <a class="button" href="/blueprints/{{.ID}}/duplicate">复制</a>
-      <a class="button-primary" href="/blueprints/{{.ID}}/deploy">部署</a>
-      <a class="button button-danger" href="/blueprints/{{.ID}}/delete" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除蓝图“{{.Name}}”？" data-loading-label="删除中…">删除</a>
+    <div class="btn-list">
+      <a class="btn btn-outline-secondary" href="/blueprints/{{.ID}}/edit"><i class="ti ti-pencil icon" aria-hidden="true"></i><span>编辑</span></a>
+      <a class="btn btn-outline-secondary" href="/blueprints/{{.ID}}/duplicate"><i class="ti ti-copy icon" aria-hidden="true"></i><span>复制</span></a>
+      <a class="btn btn-primary" href="/blueprints/{{.ID}}/deploy"><i class="ti ti-rocket icon" aria-hidden="true"></i><span>部署</span></a>
+      <a class="btn btn-outline-danger" href="/blueprints/{{.ID}}/delete" hx-delete="/blueprints/{{.ID}}" hx-target="#blueprint-rows" hx-swap="innerHTML" hx-confirm="删除蓝图“{{.Name}}”？" data-loading-label="删除中…"><i class="ti ti-trash icon" aria-hidden="true"></i><span>删除</span></a>
     </div>
   </td>
 </tr>
 {{else}}
-<tr><td colspan="4" class="empty-row">暂无蓝图。确认<a href="/accounts">账号</a>与<a href="/projects">项目</a>已准备好，再<a href="/blueprints/new">新建蓝图</a>。</td></tr>
+<tr><td colspan="4" class="empty-row">
+  <div class="empty">
+    <div class="empty-icon"><i class="ti ti-template" aria-hidden="true"></i></div>
+    <p class="empty-title">暂无蓝图</p>
+    <p class="empty-subtitle text-secondary">确认账号与项目已准备好，再创建可复用蓝图。</p>
+    <div class="empty-action">
+      <div class="btn-list justify-content-center">
+        <a class="btn btn-outline-secondary" href="/accounts"><i class="ti ti-cloud-lock icon" aria-hidden="true"></i><span>查看账号</span></a>
+        <a class="btn btn-outline-secondary" href="/projects"><i class="ti ti-folders icon" aria-hidden="true"></i><span>查看项目</span></a>
+        <a class="btn btn-primary" href="/blueprints/new"><i class="ti ti-plus icon" aria-hidden="true"></i><span>新建蓝图</span></a>
+      </div>
+    </div>
+  </div>
+</td></tr>
 {{end}}
 {{end}}
 
 {{define "job_history"}}
-<div id="job-history" hx-get="/environments/{{.Env.ID}}/jobs"{{if .HasActiveJobs}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML">
-  <div class="table-wrap responsive-table-wrap job-history-wrap">
-    <table class="data-table responsive-table job-history-table">
+<div id="job-history" class="card job-history-card" hx-get="/environments/{{.Env.ID}}/jobs"{{if .HasActiveJobs}} hx-trigger="every 2s"{{end}} hx-swap="outerHTML">
+  <div class="table-responsive responsive-table-wrap job-history-wrap">
+    <table class="table table-vcenter card-table responsive-table job-history-table">
       <caption class="sr-only">环境 {{.Env.Name}} 的任务历史，最新任务在前</caption>
       <thead>
         <tr><th scope="col">Job</th><th scope="col">操作</th><th scope="col">状态</th><th scope="col">时间</th><th scope="col">结果</th><th scope="col">详情</th></tr>
@@ -48,7 +73,12 @@
 <tr>
   <td data-label="Job"><span class="job-id">#{{.ID}}</span></td>
   <td data-label="操作"><span class="job-action">{{.ActionLabel}}</span></td>
-  <td data-label="状态"><span class="status-badge status-{{.StatusTone}}">{{.StatusLabel}}</span></td>
+  <td data-label="状态">
+    {{if eq .StatusTone "active"}}<span class="badge bg-blue-lt text-blue status-badge">{{.StatusLabel}}</span>
+    {{else if eq .StatusTone "success"}}<span class="badge bg-green-lt text-green status-badge">{{.StatusLabel}}</span>
+    {{else if eq .StatusTone "danger"}}<span class="badge bg-red-lt text-red status-badge">{{.StatusLabel}}</span>
+    {{else}}<span class="badge bg-secondary-lt text-secondary status-badge">{{.StatusLabel}}</span>{{end}}
+  </td>
   <td data-label="时间">
     <dl class="job-times">
       <div><dt>排队时间</dt><dd>{{.QueuedAt}}</dd></div>
@@ -62,26 +92,32 @@
     {{if .ErrorExcerpt}}<p class="job-error long-value">{{.ErrorExcerpt}}</p>{{end}}
     {{if and (not .Summary) (not .ErrorExcerpt)}}<span class="muted">暂无摘要</span>{{end}}
   </td>
-  <td data-label="详情"><a id="job-detail-{{.ID}}" class="button" href="/jobs/{{.ID}}" aria-label="查看 Job #{{.ID}} 详情">查看</a></td>
+  <td data-label="详情"><div class="btn-list"><a id="job-detail-{{.ID}}" class="btn btn-outline-primary" href="/jobs/{{.ID}}" aria-label="查看 Job #{{.ID}} 详情"><i class="ti ti-eye icon" aria-hidden="true"></i><span>查看</span></a></div></td>
 </tr>
 {{else}}
-<tr><td colspan="6" class="empty-row">尚无任务记录。部署或执行环境操作后，历史会显示在这里。</td></tr>
+<tr><td colspan="6" class="empty-row">
+  <div class="empty">
+    <div class="empty-icon"><i class="ti ti-history" aria-hidden="true"></i></div>
+    <p class="empty-title">尚无任务记录</p>
+    <p class="empty-subtitle text-secondary">部署或执行环境操作后，历史会显示在这里。</p>
+  </div>
+</td></tr>
 {{end}}
 {{end}}
 
 {{define "environment_status_badge"}}
-{{if eq . "pending"}}<span class="status-badge status-neutral">待预演</span>
-{{else if eq . "previewing"}}<span class="status-badge status-active">预演中</span>
-{{else if eq . "preview_ready"}}<span class="status-badge status-warning">预演就绪</span>
-{{else if eq . "provisioning"}}<span class="status-badge status-active">创建中</span>
-{{else if eq . "up"}}<span class="status-badge status-success">运行中</span>
-{{else if eq . "refreshing"}}<span class="status-badge status-active">漂移检测中</span>
-{{else if eq . "destroy_previewing"}}<span class="status-badge status-warning">销毁预演中</span>
-{{else if eq . "destroy_preview_ready"}}<span class="status-badge status-warning">待确认销毁</span>
-{{else if eq . "destroying"}}<span class="status-badge status-active">销毁中</span>
-{{else if eq . "failed"}}<span class="status-badge status-danger">失败</span>
-{{else if eq . "destroyed"}}<span class="status-badge status-neutral">已销毁</span>
-{{else}}<span class="status-badge status-neutral long-value">{{.}}</span>{{end}}
+{{if eq . "pending"}}<span class="badge bg-secondary-lt text-secondary status-badge">待预演</span>
+{{else if eq . "previewing"}}<span class="badge bg-blue-lt text-blue status-badge">预演中</span>
+{{else if eq . "preview_ready"}}<span class="badge bg-yellow-lt text-yellow status-badge">预演就绪</span>
+{{else if eq . "provisioning"}}<span class="badge bg-blue-lt text-blue status-badge">创建中</span>
+{{else if eq . "up"}}<span class="badge bg-green-lt text-green status-badge">运行中</span>
+{{else if eq . "refreshing"}}<span class="badge bg-blue-lt text-blue status-badge">漂移检测中</span>
+{{else if eq . "destroy_previewing"}}<span class="badge bg-yellow-lt text-yellow status-badge">销毁预演中</span>
+{{else if eq . "destroy_preview_ready"}}<span class="badge bg-yellow-lt text-yellow status-badge">待确认销毁</span>
+{{else if eq . "destroying"}}<span class="badge bg-blue-lt text-blue status-badge">销毁中</span>
+{{else if eq . "failed"}}<span class="badge bg-red-lt text-red status-badge">失败</span>
+{{else if eq . "destroyed"}}<span class="badge bg-secondary-lt text-secondary status-badge">已销毁</span>
+{{else}}<span class="badge bg-secondary-lt text-secondary status-badge long-value">{{.}}</span>{{end}}
 {{end}}
 
 {{define "env_status"}}

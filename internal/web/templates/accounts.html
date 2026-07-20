@@ -1,16 +1,18 @@
 {{define "content"}}
-<section class="page-panel" aria-labelledby="accounts-title">
-  <div class="page-header">
+<section class="card page-panel resource-list-card" aria-labelledby="accounts-title">
+  <div class="card-header">
     <div>
-      <h2 class="page-title" id="accounts-title">AWS 云账号</h2>
-      <p class="page-description">管理用于蓝图和环境部署的 AWS 账号。</p>
+      <h2 class="card-title page-title" id="accounts-title">AWS 云账号</h2>
+      <p class="card-subtitle page-description">管理用于蓝图和环境部署的 AWS 账号。</p>
     </div>
-    <a class="button button-primary" href="/accounts/new">添加账号</a>
+    <div class="card-actions">
+      <a class="btn btn-primary" href="/accounts/new"><i class="ti ti-plus icon" aria-hidden="true"></i><span>添加账号</span></a>
+    </div>
   </div>
   <div class="notice err" id="account-feedback" role="alert" aria-live="assertive" hidden></div>
   <div id="account-delete-status" class="notice ok" role="status" aria-live="polite" tabindex="-1" hidden></div>
-  <div class="table-wrap responsive-table-wrap">
-    <table class="data-table responsive-table">
+  <div class="table-responsive responsive-table-wrap">
+    <table class="table table-vcenter card-table responsive-table">
       <caption class="sr-only">AWS 云账号列表</caption>
       <thead><tr><th scope="col">别名</th><th scope="col">默认区域</th><th scope="col">Account ID</th><th scope="col">ARN</th><th scope="col">操作</th></tr></thead>
       <tbody id="rows">{{template "rows" .Accounts}}</tbody>

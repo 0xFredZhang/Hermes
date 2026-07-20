@@ -5,10 +5,17 @@
   <td data-label="默认区域" class="long-value">{{.DefaultRegion}}</td>
   <td data-label="Account ID" class="long-value">{{.AWSAccountID}}</td>
   <td data-label="ARN" class="long-value">{{.ARN}}</td>
-  <td data-label="操作"><a class="button button-danger" href="/accounts/{{.ID}}/delete" hx-delete="/accounts/{{.ID}}" hx-target="#rows" hx-swap="innerHTML"
-              hx-confirm="删除账号“{{.Name}}”？" data-loading-label="删除中…">删除</a></td>
+  <td data-label="操作"><div class="btn-list"><a class="btn btn-outline-danger" href="/accounts/{{.ID}}/delete" hx-delete="/accounts/{{.ID}}" hx-target="#rows" hx-swap="innerHTML"
+              hx-confirm="删除账号“{{.Name}}”？" data-loading-label="删除中…"><i class="ti ti-trash icon" aria-hidden="true"></i><span>删除</span></a></div></td>
 </tr>
 {{else}}
-<tr><td colspan="5" class="empty-row">暂无账号。先<a href="/accounts/new">添加 AWS 账号</a>作为部署凭证，再创建项目与蓝图。</td></tr>
+<tr><td colspan="5" class="empty-row">
+  <div class="empty">
+    <div class="empty-icon"><i class="ti ti-cloud-lock" aria-hidden="true"></i></div>
+    <p class="empty-title">暂无 AWS 云账号</p>
+    <p class="empty-subtitle text-secondary">先添加部署凭据，再创建项目与蓝图。</p>
+    <div class="empty-action"><a class="btn btn-primary" href="/accounts/new"><i class="ti ti-plus icon" aria-hidden="true"></i><span>添加 AWS 云账号</span></a></div>
+  </div>
+</td></tr>
 {{end}}
 {{end}}

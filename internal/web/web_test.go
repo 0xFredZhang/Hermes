@@ -46,8 +46,8 @@ func TestTablerAssetsAreEmbedded(t *testing.T) {
 	}
 	for _, want := range []string{
 		"--tblr-", ".navbar-vertical", ".app-shell", ".skip-link", ".form-surface", ".password-control",
-		"dialog::backdrop", `content:attr(data-label)`, `.table-wrap{margin-top:`, `:focus-visible`,
-		`@media (max-width:39.999rem){.responsive-table-wrap{border:0`,
+		"dialog::backdrop", `content:attr(data-label)`, `.resource-list-card,.job-history-card{border-color:`, `:focus-visible`,
+		`@media (max-width:39.999rem){.resource-list-card .card-header{flex-direction:column`, `.responsive-table-wrap{border:0`,
 		`@media (prefers-reduced-motion:reduce)`, `button[data-loading-label][aria-busy=true]:after`,
 		`.blueprint-form-page`, `.summary-grid`, `.disclosure-toggle`,
 		`.job-history-wrap`, `.status-badge`, `.diagnostic-grid`, `.log-panel{max-height:420px`, `.log-panel-full{max-height:70vh`, `.copy-log-status`,
@@ -587,11 +587,14 @@ func TestTablesHaveCaptionsAndScopedHeaders(t *testing.T) {
 		`<caption class="sr-only">Pulumi 环境列表</caption>`,
 		`<th scope="col">Stack</th>`,
 		`<td data-label="Stack" class="long-value">staging-7</td>`,
-		`<span class="status-badge status-success">运行中</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered environment table missing %q", want)
 		}
+	}
+	runningBadge := requireTagWithClassTokens(t, body, "span", "badge", "bg-green-lt", "text-green", "status-badge")
+	if !strings.Contains(body[strings.Index(body, runningBadge):], ">运行中</span>") {
+		t.Error("rendered environment table status badge is missing visible text 运行中")
 	}
 
 	for _, tc := range []struct {
@@ -618,6 +621,121 @@ func TestTablesHaveCaptionsAndScopedHeaders(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestListPagesUseTablerTables(t *testing.T) {
+	fixtures := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "accounts",
+			body: renderPageBody(t, "accounts", map[string]any{
+				"Accounts": []map[string]any{{
+					"ID": int64(1), "Name": "ops", "DefaultRegion": "ap-southeast-1",
+					"AWSAccountID": "123456789012", "ARN": "arn:aws:iam::123456789012:user/ops",
+				}},
+			}),
+		},
+		{
+			name: "projects",
+			body: renderPageBody(t, "projects", map[string]any{
+				"Projects": []map[string]any{{"ID": int64(2), "Name": "console", "Description": "operations UI"}},
+			}),
+		},
+		{
+			name: "blueprints",
+			body: renderPageBody(t, "blueprints", map[string]any{
+				"Blueprints": []map[string]any{{
+					"ID": int64(3), "Name": "web", "Params": map[string]any{
+						"Region": "ap-southeast-1", "EC2": map[string]any{"InstanceType": "t3.micro", "Count": 1},
+					},
+				}},
+			}),
+		},
+		{
+			name: "environments",
+			body: renderPageBody(t, "environments", map[string]any{
+				"Environments": []map[string]any{{
+					"ID": int64(4), "Name": "staging", "PulumiStack": "staging-4",
+					"Region": "ap-southeast-1", "Status": "up",
+				}},
+			}),
+		},
+	}
+
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			requireTagWithClassTokens(t, fixture.body, "section", "card")
+			requireTagWithClassTokens(t, fixture.body, "div", "table-responsive")
+			requireTagWithClassTokens(t, fixture.body, "table", "table", "table-vcenter")
+			requireTagWithClassTokens(t, fixture.body, "a", "btn")
+			for _, action := range tagsWithClassTokens(fixture.body, "a", "btn") {
+				if !strings.Contains(action, `class="`) {
+					t.Fatalf("Tabler action has no class attribute: %s", action)
+				}
+			}
+		})
+	}
+
+	blueprints := fixtures[2].body
+	requireTagWithClassTokens(t, blueprints, "div", "btn-list")
+	for _, iconClass := range []string{"ti-pencil", "ti-copy", "ti-rocket", "ti-trash"} {
+		requireTagWithClassTokens(t, blueprints, "i", "ti", iconClass)
+	}
+	for _, label := range []string{"编辑", "复制", "部署", "删除"} {
+		if !strings.Contains(blueprints, ">"+label+"</a>") && !strings.Contains(blueprints, ">"+label+"</span>") {
+			t.Errorf("blueprint Tabler action is missing visible text %q", label)
+		}
+	}
+}
+
+func TestStatusBadgesUseTablerTonesAndText(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		label  string
+		tone   []string
+	}{
+		{status: "pending", label: "待预演", tone: []string{"bg-secondary-lt", "text-secondary"}},
+		{status: "previewing", label: "预演中", tone: []string{"bg-blue-lt", "text-blue"}},
+		{status: "preview_ready", label: "预演就绪", tone: []string{"bg-yellow-lt", "text-yellow"}},
+		{status: "up", label: "运行中", tone: []string{"bg-green-lt", "text-green"}},
+		{status: "failed", label: "失败", tone: []string{"bg-red-lt", "text-red"}},
+		{status: "destroyed", label: "已销毁", tone: []string{"bg-secondary-lt", "text-secondary"}},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			var body bytes.Buffer
+			if err := newTestRenderer(t).RenderPartial(&body, "env_status", map[string]any{
+				"Env": map[string]any{"ID": int64(9), "Name": "demo", "Status": tc.status},
+			}); err != nil {
+				t.Fatalf("RenderPartial env_status: %v", err)
+			}
+			badge := requireTagWithClassTokens(t, body.String(), "span", append([]string{"badge"}, tc.tone...)...)
+			badgeStart := strings.Index(body.String(), badge)
+			badgeEnd := strings.Index(body.String()[badgeStart:], "</span>")
+			if badgeEnd == -1 || !strings.Contains(body.String()[badgeStart:badgeStart+badgeEnd], tc.label) {
+				t.Errorf("status %q badge does not include visible label %q: %s", tc.status, tc.label, body.String())
+			}
+		})
+	}
+
+	var history bytes.Buffer
+	if err := newTestRenderer(t).RenderPartial(&history, "job_history", map[string]any{
+		"Env": map[string]any{"ID": int64(7), "Name": "staging"},
+		"Jobs": []map[string]any{
+			{"ID": int64(41), "ActionLabel": "创建资源", "StatusLabel": "执行中", "StatusTone": "active"},
+			{"ID": int64(42), "ActionLabel": "预演创建", "StatusLabel": "成功", "StatusTone": "success"},
+		},
+	}); err != nil {
+		t.Fatalf("RenderPartial job_history: %v", err)
+	}
+	requireTagWithClassTokens(t, history.String(), "span", "badge", "bg-blue-lt", "text-blue")
+	requireTagWithClassTokens(t, history.String(), "span", "badge", "bg-green-lt", "text-green")
+	for _, label := range []string{"执行中", "成功"} {
+		if !strings.Contains(history.String(), ">"+label+"</span>") {
+			t.Errorf("job status badge is missing visible text %q", label)
+		}
 	}
 }
 
@@ -703,11 +821,11 @@ func TestStatusBadgesIncludeText(t *testing.T) {
 	fragments := readTemplateSource(t, "_fragments.html")
 	for _, want := range []string{
 		`define "environment_status_badge"`,
-		`status-badge status-neutral">待预演`,
-		`status-badge status-active">预演中`,
-		`status-badge status-success">运行中`,
-		`status-badge status-danger">失败`,
-		`status-badge status-neutral">已销毁`,
+		`>待预演</span>`,
+		`>预演中</span>`,
+		`>运行中</span>`,
+		`>失败</span>`,
+		`>已销毁</span>`,
 	} {
 		if !strings.Contains(fragments, want) {
 			t.Errorf("status badge lacks semantic text; missing %q", want)
@@ -724,13 +842,13 @@ func TestStatusBadgesIncludeText(t *testing.T) {
 
 	for _, tc := range []struct {
 		status string
-		want   string
+		label  string
 	}{
-		{"pending", `status-neutral">待预演`},
-		{"previewing", `status-active">预演中`},
-		{"up", `status-success">运行中`},
-		{"failed", `status-danger">失败`},
-		{"destroyed", `status-neutral">已销毁`},
+		{"pending", "待预演"},
+		{"previewing", "预演中"},
+		{"up", "运行中"},
+		{"failed", "失败"},
+		{"destroyed", "已销毁"},
 	} {
 		t.Run(tc.status, func(t *testing.T) {
 			var body bytes.Buffer
@@ -740,8 +858,12 @@ func TestStatusBadgesIncludeText(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("RenderPartial env_status: %v", err)
 			}
-			if !strings.Contains(body.String(), tc.want) {
-				t.Errorf("rendered status %q missing labelled badge %q: %s", tc.status, tc.want, body.String())
+			output := body.String()
+			badge := requireTagWithClassTokens(t, output, "span", "badge", "status-badge")
+			badgeStart := strings.Index(output, badge)
+			badgeEnd := strings.Index(output[badgeStart:], "</span>")
+			if badgeEnd == -1 || !strings.Contains(output[badgeStart:badgeStart+badgeEnd], tc.label) {
+				t.Errorf("rendered status %q missing labelled badge %q: %s", tc.status, tc.label, output)
 			}
 		})
 	}
