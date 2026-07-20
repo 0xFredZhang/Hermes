@@ -54,7 +54,12 @@ reset-local-state: ## Remove local Pulumi state (requires CONFIRM=reset-state; o
 
 check: ## Run generated, JS, format, unit, vet, and build checks (no AWS)
 	npm run css:build
-	git diff --exit-code -- internal/web/static/app.css internal/web/static/tabler.min.js internal/web/static/fonts
+	@status="$$(git status --porcelain --untracked-files=all -- internal/web/static/app.css internal/web/static/tabler.min.js internal/web/static/fonts)"; \
+		if [ -n "$$status" ]; then \
+			echo "generated web assets are out of date:"; \
+			printf '%s\n' "$$status"; \
+			exit 1; \
+		fi
 	npm run js:test
 	@unformatted="$$(gofmt -l cmd internal)"; \
 		if [ -n "$$unformatted" ]; then \

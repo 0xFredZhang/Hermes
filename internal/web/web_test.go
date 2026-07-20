@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -72,6 +73,69 @@ func TestTablerAssetsAreEmbedded(t *testing.T) {
 	}
 	if len(font) == 0 {
 		t.Fatal("static Tabler icon font must not be empty")
+	}
+}
+
+func TestTablerFontReferencesMatchEmbeddedAssets(t *testing.T) {
+	css, err := StaticFS.ReadFile("static/app.css")
+	if err != nil {
+		t.Fatalf("static app stylesheet must be embedded: %v", err)
+	}
+
+	fontURLPattern := regexp.MustCompile(`url\((?:"|')?(\./fonts/[^?"')]+)`)
+	referenced := make(map[string]struct{})
+	for _, match := range fontURLPattern.FindAllStringSubmatch(string(css), -1) {
+		referenced[match[1]] = struct{}{}
+	}
+	if len(referenced) == 0 {
+		t.Fatal("static app stylesheet must reference at least one local icon font")
+	}
+
+	for fontURL := range referenced {
+		fontPath := "static/" + strings.TrimPrefix(fontURL, "./")
+		font, err := StaticFS.ReadFile(fontPath)
+		if err != nil {
+			t.Fatalf("referenced icon font %q must be embedded: %v", fontURL, err)
+		}
+		if len(font) == 0 {
+			t.Fatalf("referenced icon font %q must not be empty", fontURL)
+		}
+	}
+
+	entries, err := StaticFS.ReadDir("static/fonts")
+	if err != nil {
+		t.Fatalf("static icon font directory must be embedded: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			t.Fatalf("static icon font directory contains unexpected subdirectory %q", entry.Name())
+		}
+		fontURL := "./fonts/" + entry.Name()
+		if _, ok := referenced[fontURL]; !ok {
+			t.Fatalf("embedded icon font %q is not referenced by static app stylesheet", fontURL)
+		}
+	}
+	if len(entries) != len(referenced) {
+		t.Fatalf("embedded icon font count = %d, referenced font count = %d", len(entries), len(referenced))
+	}
+}
+
+func TestMakeCheckDetectsUntrackedGeneratedAssets(t *testing.T) {
+	makefile, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+
+	for _, want := range []string{
+		`status="$$(git status --porcelain --untracked-files=all -- internal/web/static/app.css internal/web/static/tabler.min.js internal/web/static/fonts)"`,
+		`printf '%s\n' "$$status"`,
+	} {
+		if !strings.Contains(string(makefile), want) {
+			t.Fatalf("Makefile generated asset check missing %q", want)
+		}
+	}
+	if strings.Contains(string(makefile), "git diff --exit-code -- internal/web/static/app.css") {
+		t.Fatal("Makefile generated asset check must not ignore untracked files")
 	}
 }
 
