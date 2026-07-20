@@ -1,20 +1,18 @@
 {{define "content"}}
-<section class="page-panel login-panel" aria-labelledby="login-title">
-  <div class="page-header">
-    <div>
-      <h2 class="page-title" id="login-title">登录</h2>
-      <p class="page-description">输入本地控制台口令。</p>
-    </div>
+<section class="card login-panel" aria-labelledby="login-title">
+  <div class="card-body">
+    <h1 class="h2 text-center mb-2" id="login-title">登录</h1>
+    <p class="text-secondary text-center mb-4">输入本地控制台口令。</p>
+    {{if .Error}}<p class="notice err alert alert-danger" id="login-error" role="alert">{{.Error}}</p>{{end}}
+    <form class="login-form" method="post" action="/login">
+      <div class="field-block mb-3">
+        <label class="field-label form-label" for="login-password">口令</label>
+        <input class="form-control" id="login-password" type="password" name="password" autocomplete="current-password" required autofocus{{if .Error}} aria-invalid="true" aria-describedby="login-error"{{end}}>
+      </div>
+      <div class="form-actions">
+        <button class="button-primary btn btn-primary w-100" type="submit" data-loading-label="登录中…">登录</button>
+      </div>
+    </form>
   </div>
-  {{if .Error}}<p class="notice err" id="login-error" role="alert">{{.Error}}</p>{{end}}
-  <form class="form-page" method="post" action="/login">
-    <div class="field-block">
-      <label class="field-label" for="login-password">口令</label>
-      <input id="login-password" type="password" name="password" autocomplete="current-password" required autofocus{{if .Error}} aria-invalid="true" aria-describedby="login-error"{{end}}>
-    </div>
-    <div class="form-actions">
-      <button class="button-primary" type="submit" data-loading-label="登录中…">登录</button>
-    </div>
-  </form>
 </section>
 {{end}}

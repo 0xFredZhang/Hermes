@@ -88,59 +88,21 @@
 @layer components {
   .app-shell {
     @apply min-h-screen bg-console-canvas text-console-ink;
-  }
-
-  .app-frame {
-    @apply mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8;
+    --tblr-primary: var(--color-console-primary);
+    --tblr-primary-rgb: 37, 95, 133;
+    --tblr-body-bg: var(--color-console-canvas);
+    --tblr-body-color: var(--color-console-ink);
+    --tblr-border-color: var(--color-console-border);
   }
 
   .skip-link {
     @apply fixed top-3 left-3 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-md bg-console-ink px-3 py-2 font-medium text-white no-underline transition-transform;
     min-height: 44px;
+    z-index: var(--tblr-toast-zindex, 1090);
   }
 
   .skip-link:focus {
     @apply translate-y-0 text-white no-underline;
-  }
-
-  .app-header {
-    @apply mb-5 flex flex-col gap-4 border-b border-console-border pb-4 lg:flex-row lg:items-center lg:justify-between;
-  }
-
-  .brand-block {
-    @apply min-w-0;
-  }
-
-  .brand-title {
-    @apply m-0 text-2xl font-semibold tracking-normal text-console-ink;
-  }
-
-  .brand-subtitle {
-    @apply mt-1 text-sm text-console-muted;
-  }
-
-  .top-nav {
-    @apply flex flex-wrap items-center gap-2;
-  }
-
-  .nav-link {
-    @apply inline-flex h-11 items-center rounded-md px-3 text-sm font-medium text-console-muted transition-colors;
-  }
-
-  .nav-link:hover {
-    @apply bg-console-subtle text-console-ink no-underline;
-  }
-
-  .nav-link-active {
-    @apply bg-console-primary text-white;
-  }
-
-  .nav-link-active:hover {
-    @apply bg-console-primary-strong text-white no-underline;
-  }
-
-  .logout-form {
-    @apply lg:ml-2;
   }
 
   .app-main {
@@ -192,15 +154,7 @@
   }
 
   .login-panel {
-    @apply mx-auto mt-8 w-full max-w-md sm:mt-16;
-  }
-
-  .login-shell .app-header {
-    @apply justify-center text-center;
-  }
-
-  .login-shell .brand-subtitle {
-    @apply hidden;
+    @apply m-0 w-full;
   }
 
   .form-page {
@@ -691,8 +645,169 @@
     @apply opacity-100;
   }
 
+  .page-wrapper {
+    min-width: 0;
+    background: var(--color-console-canvas);
+  }
+
+  .hermes-sidebar {
+    --tblr-navbar-active-bg: var(--color-console-primary-soft);
+    border-color: var(--color-console-border);
+    background: var(--color-console-surface);
+    box-shadow: none;
+  }
+
+  .hermes-sidebar .container-fluid {
+    min-width: 0;
+  }
+
+  .hermes-sidebar .navbar-brand {
+    min-height: 44px;
+    gap: 0.625rem;
+    color: var(--color-console-ink);
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .hermes-brand-icon {
+    color: var(--color-console-primary);
+    font-size: 1.5rem;
+  }
+
+  .hermes-sidebar .navbar-toggler {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.625rem;
+    border-color: var(--color-console-border-strong);
+    background: var(--color-console-surface);
+  }
+
+  .hermes-sidebar .navbar-toggler:hover,
+  .hermes-sidebar .navbar-toggler:active {
+    border-color: var(--color-console-primary);
+    background: var(--color-console-primary-soft);
+    color: var(--color-console-primary-strong);
+  }
+
+  .hermes-sidebar .navbar-nav {
+    gap: 0.25rem;
+  }
+
+  .hermes-sidebar .nav-link {
+    min-height: 44px;
+    border-radius: 6px;
+    color: var(--color-console-muted);
+    font-weight: 500;
+    transition: background-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .hermes-sidebar .nav-link:hover {
+    background: var(--color-console-subtle);
+    color: var(--color-console-ink);
+    text-decoration: none;
+  }
+
+  .hermes-sidebar .nav-link.active,
+  .hermes-sidebar .nav-link.active:hover {
+    background: var(--color-console-primary-soft);
+    color: var(--color-console-primary-strong);
+  }
+
+  .hermes-sidebar .nav-link-icon {
+    color: currentColor;
+    font-size: 1.25rem;
+  }
+
+  .hermes-topbar {
+    min-height: 4rem;
+    border-color: var(--color-console-border);
+    background: var(--color-console-surface);
+    box-shadow: none;
+  }
+
+  .hermes-logout {
+    min-height: 44px;
+    gap: 0.5rem;
+    border-color: var(--color-console-border-strong);
+    background: var(--color-console-surface);
+    color: var(--color-console-muted);
+    box-shadow: none;
+  }
+
+  .hermes-logout:hover:not(:disabled):not([aria-busy="true"]),
+  .hermes-logout:active:not(:disabled):not([aria-busy="true"]) {
+    border-color: var(--color-console-primary);
+    background: var(--color-console-subtle);
+    color: var(--color-console-primary-strong);
+  }
+
+  .auth-shell {
+    --tblr-primary: var(--color-console-primary);
+    --tblr-primary-rgb: 37, 95, 133;
+    min-height: 100%;
+    padding-block: 2rem;
+    color: var(--color-console-ink);
+    background: var(--color-console-canvas);
+  }
+
+  .auth-main {
+    width: 100%;
+  }
+
+  .auth-brand {
+    display: flex;
+    min-height: 44px;
+    margin-bottom: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    color: var(--color-console-ink);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .auth-brand:hover {
+    color: var(--color-console-primary-strong);
+    text-decoration: none;
+  }
+
+  .auth-brand .ti {
+    color: var(--color-console-primary);
+    font-size: 1.75rem;
+  }
+
+  .login-panel {
+    border-color: var(--color-console-border);
+    border-radius: 8px;
+    background: var(--color-console-surface);
+    box-shadow: none;
+  }
+
+  .login-panel .card-body {
+    padding: 1.5rem;
+  }
+
+  .login-panel .button-primary {
+    min-height: 44px;
+    border-color: var(--color-console-primary);
+    background: var(--color-console-primary);
+    color: white;
+  }
+
+  .login-panel .button-primary:hover:not(:disabled):not([aria-busy="true"]),
+  .login-panel .button-primary:active:not(:disabled):not([aria-busy="true"]) {
+    border-color: var(--color-console-primary-strong);
+    background: var(--color-console-primary-strong);
+    color: white;
+  }
+
   dialog {
     @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-md border border-console-border-strong bg-console-surface p-0 text-console-ink;
+    max-height: calc(100dvh - 2rem);
+    overflow: auto;
   }
 
   dialog::backdrop {

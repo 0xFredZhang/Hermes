@@ -8,29 +8,79 @@
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/blueprint_metadata.js" defer></script>
   <script src="/static/ui_feedback.js" defer></script>
+  <script src="/static/tabler.min.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
-<body class="app-shell{{if .HideNav}} login-shell{{end}}">
+<body class="{{if .HideNav}}page page-center auth-shell{{else}}page app-shell{{end}}">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
-  <div class="app-frame">
-    <header class="app-header">
-      <div class="brand-block">
-        <h1 class="brand-title">Hermes</h1>
-        <p class="brand-subtitle">自托管 AWS 资源编排控制台</p>
+  {{if .HideNav}}
+  <main class="container container-tight py-4 auth-main" id="main-content" tabindex="-1">
+    <a class="auth-brand" href="/login" aria-label="Hermes 登录">
+      <i class="ti ti-cloud-lock" aria-hidden="true"></i>
+      <span>Hermes</span>
+    </a>
+    {{template "content" .}}
+  </main>
+  {{else}}
+  <aside class="navbar navbar-vertical navbar-expand-lg hermes-sidebar" aria-label="主导航">
+    <div class="container-fluid">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#hermes-sidebar-menu" aria-controls="hermes-sidebar-menu" aria-expanded="false" aria-label="切换主导航">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <a class="navbar-brand navbar-brand-autodark" href="/accounts" aria-label="Hermes 账号首页">
+        <i class="ti ti-cloud-lock hermes-brand-icon" aria-hidden="true"></i>
+        <span>Hermes</span>
+      </a>
+      <div class="collapse navbar-collapse" id="hermes-sidebar-menu">
+        <ul class="navbar-nav pt-lg-3">
+          <li class="nav-item">
+            <a class="nav-link{{if eq .ActiveNav "accounts"}} active{{end}}" href="/accounts"{{if eq .ActiveNav "accounts"}} aria-current="page"{{end}}>
+              <span class="nav-link-icon" aria-hidden="true"><i class="ti ti-cloud-cog" aria-hidden="true"></i></span>
+              <span class="nav-link-title">账号</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{{if eq .ActiveNav "projects"}} active{{end}}" href="/projects"{{if eq .ActiveNav "projects"}} aria-current="page"{{end}}>
+              <span class="nav-link-icon" aria-hidden="true"><i class="ti ti-folders" aria-hidden="true"></i></span>
+              <span class="nav-link-title">项目</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{{if eq .ActiveNav "blueprints"}} active{{end}}" href="/blueprints"{{if eq .ActiveNav "blueprints"}} aria-current="page"{{end}}>
+              <span class="nav-link-icon" aria-hidden="true"><i class="ti ti-template" aria-hidden="true"></i></span>
+              <span class="nav-link-title">蓝图</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{{if eq .ActiveNav "environments"}} active{{end}}" href="/environments"{{if eq .ActiveNav "environments"}} aria-current="page"{{end}}>
+              <span class="nav-link-icon" aria-hidden="true"><i class="ti ti-server-cog" aria-hidden="true"></i></span>
+              <span class="nav-link-title">环境</span>
+            </a>
+          </li>
+        </ul>
       </div>
-      {{if not .HideNav}}<nav class="top-nav" aria-label="主导航">
-        <a class="nav-link{{if eq .ActiveNav "accounts"}} nav-link-active{{end}}" href="/accounts"{{if eq .ActiveNav "accounts"}} aria-current="page"{{end}}>账号</a>
-        <a class="nav-link{{if eq .ActiveNav "projects"}} nav-link-active{{end}}" href="/projects"{{if eq .ActiveNav "projects"}} aria-current="page"{{end}}>项目</a>
-        <a class="nav-link{{if eq .ActiveNav "blueprints"}} nav-link-active{{end}}" href="/blueprints"{{if eq .ActiveNav "blueprints"}} aria-current="page"{{end}}>蓝图</a>
-        <a class="nav-link{{if eq .ActiveNav "environments"}} nav-link-active{{end}}" href="/environments"{{if eq .ActiveNav "environments"}} aria-current="page"{{end}}>环境</a>
-        <form class="logout-form" method="post" action="/logout"><button class="button-muted" data-loading-label="退出中…">退出</button></form>
-      </nav>{{end}}
+    </div>
+  </aside>
+  <div class="page-wrapper">
+    <header class="navbar navbar-expand-md d-print-none hermes-topbar">
+      <div class="container-fluid">
+        <div class="navbar-nav flex-row ms-auto">
+          <form class="logout-form" method="post" action="/logout">
+            <button class="btn btn-outline-secondary hermes-logout" type="submit" data-loading-label="退出中…">
+              <i class="ti ti-logout" aria-hidden="true"></i>
+              <span>退出</span>
+            </button>
+          </form>
+        </div>
+      </div>
     </header>
-    <main class="app-main" id="main-content" tabindex="-1">
-      {{template "content" .}}
-    </main>
+    <div class="page-body">
+      <main class="container-xl app-main" id="main-content" tabindex="-1">
+        {{template "content" .}}
+      </main>
+    </div>
   </div>
-  {{if not .HideNav}}<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <form class="confirm-dialog" method="dialog">
       <h2 class="section-title" id="confirm-title">确认操作</h2>
       <p id="confirm-message" class="long-value">此操作需要确认。</p>
@@ -39,6 +89,7 @@
         <button class="button-danger" id="confirm-submit" type="button" value="confirm">确认</button>
       </div>
     </form>
-  </dialog>{{end}}
+  </dialog>
+  {{end}}
 </body>
 </html>{{end}}

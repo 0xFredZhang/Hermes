@@ -160,17 +160,125 @@ func TestStaticAppJSIsEmbeddedWithProgressiveEnhancements(t *testing.T) {
 	}
 }
 
-func TestRenderLayoutLoadsAppStylesheet(t *testing.T) {
-	r, err := NewRenderer()
-	if err != nil {
-		t.Fatalf("NewRenderer: %v", err)
+func TestLayoutUsesTablerAdminShell(t *testing.T) {
+	body := renderPageBody(t, "accounts", map[string]any{
+		"PageTitle": "AWS 云账号",
+		"ActiveNav": "accounts",
+	})
+
+	for _, want := range []struct {
+		tag     string
+		classes []string
+	}{
+		{"body", []string{"page"}},
+		{"aside", []string{"navbar", "navbar-vertical", "navbar-expand-lg"}},
+		{"div", []string{"page-wrapper"}},
+		{"div", []string{"page-body"}},
+	} {
+		requireTagWithClassTokens(t, body, want.tag, want.classes...)
 	}
-	w := httptest.NewRecorder()
-	r.Render(w, "login", nil)
-	out := w.Body.String()
-	for _, want := range []string{`href="/static/app.css"`, `class="app-shell"`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("layout output missing %q: %s", want, out)
+
+	toggler := requireTagWithClassTokens(t, body, "button", "navbar-toggler")
+	if got := htmlAttribute(t, toggler, "data-bs-toggle"); got != "collapse" {
+		t.Errorf("mobile navigation toggle data-bs-toggle = %q, want collapse", got)
+	}
+	controls := htmlAttribute(t, toggler, "aria-controls")
+	target := strings.TrimPrefix(htmlAttribute(t, toggler, "data-bs-target"), "#")
+	if controls == "" || controls != target {
+		t.Errorf("mobile navigation toggle targets %q but aria-controls = %q", target, controls)
+	}
+	if count := strings.Count(body, `id="`+target+`"`); count != 1 {
+		t.Errorf("mobile navigation collapse id %q count = %d, want 1", target, count)
+	}
+	requireTagWithClassTokensAndAttribute(t, body, "div", "id", target, "collapse", "navbar-collapse")
+
+	activeLink := requireTagWithClassTokensAndAttribute(t, body, "a", "href", "/accounts", "nav-link")
+	requireClassTokens(t, activeLink, "nav-link", "active")
+	if got := htmlAttribute(t, activeLink, "aria-current"); got != "page" {
+		t.Errorf("active navigation aria-current = %q, want page", got)
+	}
+
+	for _, route := range []string{"/accounts", "/projects", "/blueprints", "/environments"} {
+		if !strings.Contains(body, `href="`+route+`"`) {
+			t.Errorf("authenticated shell missing route %q", route)
+		}
+	}
+	for _, want := range []string{
+		`href="/static/app.css"`, `action="/logout"`, `method="post"`, `data-loading-label="退出中…"`,
+		`href="#main-content"`, `id="main-content"`, `<dialog id="confirm-dialog"`, `method="dialog"`,
+		`aria-labelledby="confirm-title"`, `aria-describedby="confirm-message"`,
+		`id="confirm-cancel" type="button"`, `id="confirm-submit" type="button"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("authenticated shell missing behavior hook %q", want)
+		}
+	}
+
+	scriptPaths := []string{
+		"/static/htmx.min.js",
+		"/static/blueprint_metadata.js",
+		"/static/ui_feedback.js",
+		"/static/tabler.min.js",
+		"/static/app.js",
+	}
+	previous := -1
+	for _, path := range scriptPaths {
+		tag := requireTagWithAttribute(t, body, "script", "src", path)
+		if _, ok := htmlAttributeValue(tag, "defer"); !ok {
+			t.Errorf("script %q does not load with defer", path)
+		}
+		position := strings.Index(body, tag)
+		if position <= previous {
+			t.Errorf("script %q loads out of order", path)
+		}
+		previous = position
+	}
+}
+
+func TestLoginUsesTablerAuthShell(t *testing.T) {
+	body := renderPageBody(t, "login", map[string]any{
+		"PageTitle": "登录",
+		"HideNav":   true,
+		"Error":     "口令错误",
+	})
+
+	requireTagWithClassTokens(t, body, "body", "page", "page-center")
+	requireTagWithClassTokens(t, body, "main", "container-tight")
+	if cards := tagsWithClassTokens(body, "*", "card"); len(cards) != 1 {
+		t.Fatalf("login card count = %d, want exactly 1", len(cards))
+	}
+	for _, forbidden := range []string{
+		`aria-label="主导航"`, `action="/logout"`, `id="confirm-dialog"`,
+		"navbar-vertical", "navbar-toggler",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("login shell unexpectedly contains authenticated UI %q", forbidden)
+		}
+	}
+}
+
+func TestTablerIconsRemainAccessible(t *testing.T) {
+	authenticated := renderPageBody(t, "accounts", map[string]any{"ActiveNav": "accounts"})
+	login := renderPageBody(t, "login", map[string]any{"HideNav": true})
+	body := authenticated + login
+
+	icons := tagsWithClassPrefix(body, "i", "ti-")
+	if len(icons) < 6 {
+		t.Fatalf("rendered Tabler icon count = %d, want at least 6 shell icons", len(icons))
+	}
+	for _, icon := range icons {
+		if got := htmlAttribute(t, icon, "aria-hidden"); got != "true" {
+			t.Errorf("decorative Tabler icon must be hidden from assistive technology: %s", icon)
+		}
+	}
+
+	iconOnlyControls := iconOnlyHTMLControls(authenticated)
+	if len(iconOnlyControls) == 0 {
+		t.Fatal("authenticated shell contains no icon-only control fixture")
+	}
+	for _, control := range iconOnlyControls {
+		if !hasAccessibleName(control) {
+			t.Errorf("icon-only control has no accessible name: %s", control)
 		}
 	}
 }
@@ -880,6 +988,9 @@ func TestGeneratedAssetsIncludeResponsiveAndReducedMotionRules(t *testing.T) {
 	if regexp.MustCompile(`\.field>input:not\(\[type=checkbox\]\):focus[^}]*\{[^}]*outline-style:none`).MatchString(css) {
 		t.Error("form focus styling suppresses the high-contrast focus-visible outline")
 	}
+	if !regexp.MustCompile(`\.skip-link\{[^}]*z-index:var\(--tblr-toast-zindex,1090\)`).MatchString(css) {
+		t.Error("skip link must render above Tabler's fixed navigation")
+	}
 	if strings.Contains(css, `content:attr(data-loading-label)`) || regexp.MustCompile(`button\[aria-busy=true\]:after[^}]*\{[^}]*position:absolute`).MatchString(css) {
 		t.Error("busy feedback overlays a replacement label instead of preserving stable button geometry")
 	}
@@ -890,6 +1001,163 @@ func TestGeneratedAssetsIncludeResponsiveAndReducedMotionRules(t *testing.T) {
 			t.Errorf("progressive state feedback missing %q", want)
 		}
 	}
+}
+
+func requireTagWithClassTokens(t *testing.T, body, tagName string, required ...string) string {
+	t.Helper()
+	tags := tagsWithClassTokens(body, tagName, required...)
+	if len(tags) == 0 {
+		t.Fatalf("rendered HTML has no <%s> with class tokens %q", tagName, required)
+	}
+	return tags[0]
+}
+
+func tagsWithClassTokens(body, tagName string, required ...string) []string {
+	var matches []string
+	for _, tag := range htmlStartTags(body, tagName) {
+		classValue, ok := htmlAttributeValue(tag, "class")
+		if !ok {
+			continue
+		}
+		classes := make(map[string]struct{}, len(strings.Fields(classValue)))
+		for _, className := range strings.Fields(classValue) {
+			classes[className] = struct{}{}
+		}
+		containsAll := true
+		for _, requiredClass := range required {
+			if _, ok := classes[requiredClass]; !ok {
+				containsAll = false
+				break
+			}
+		}
+		if containsAll {
+			matches = append(matches, tag)
+		}
+	}
+	return matches
+}
+
+func tagsWithClassPrefix(body, tagName, prefix string) []string {
+	var matches []string
+	for _, tag := range htmlStartTags(body, tagName) {
+		classValue, ok := htmlAttributeValue(tag, "class")
+		if !ok {
+			continue
+		}
+		for _, className := range strings.Fields(classValue) {
+			if strings.HasPrefix(className, prefix) {
+				matches = append(matches, tag)
+				break
+			}
+		}
+	}
+	return matches
+}
+
+func requireTagWithAttribute(t *testing.T, body, tagName, attribute, value string) string {
+	t.Helper()
+	for _, tag := range htmlStartTags(body, tagName) {
+		if got, ok := htmlAttributeValue(tag, attribute); ok && got == value {
+			return tag
+		}
+	}
+	t.Fatalf("rendered HTML has no <%s> with %s=%q", tagName, attribute, value)
+	return ""
+}
+
+func requireTagWithClassTokensAndAttribute(t *testing.T, body, tagName, attribute, value string, required ...string) string {
+	t.Helper()
+	for _, tag := range tagsWithClassTokens(body, tagName, required...) {
+		if got, ok := htmlAttributeValue(tag, attribute); ok && got == value {
+			return tag
+		}
+	}
+	t.Fatalf("rendered HTML has no <%s> with class tokens %q and %s=%q", tagName, required, attribute, value)
+	return ""
+}
+
+func requireClassTokens(t *testing.T, tag string, required ...string) {
+	t.Helper()
+	classValue, ok := htmlAttributeValue(tag, "class")
+	if !ok {
+		t.Fatalf("tag has no class attribute: %s", tag)
+	}
+	classes := make(map[string]struct{}, len(strings.Fields(classValue)))
+	for _, className := range strings.Fields(classValue) {
+		classes[className] = struct{}{}
+	}
+	for _, requiredClass := range required {
+		if _, ok := classes[requiredClass]; !ok {
+			t.Errorf("tag missing class token %q: %s", requiredClass, tag)
+		}
+	}
+}
+
+func htmlStartTags(body, tagName string) []string {
+	tagPattern := regexp.QuoteMeta(tagName)
+	if tagName == "*" {
+		tagPattern = `[a-z][a-z0-9:-]*`
+	}
+	pattern := regexp.MustCompile(`(?i)<` + tagPattern + `\b[^>]*>`)
+	return pattern.FindAllString(body, -1)
+}
+
+func htmlAttribute(t *testing.T, tag, name string) string {
+	t.Helper()
+	value, ok := htmlAttributeValue(tag, name)
+	if !ok {
+		t.Fatalf("tag has no %s attribute: %s", name, tag)
+	}
+	return value
+}
+
+func htmlAttributeValue(tag, name string) (string, bool) {
+	pattern := regexp.MustCompile(`(?i)\s` + regexp.QuoteMeta(name) + `(?:="([^"]*)")?(?:\s|/?>)`)
+	match := pattern.FindStringSubmatch(tag)
+	if len(match) == 0 {
+		return "", false
+	}
+	return match[1], true
+}
+
+func iconOnlyHTMLControls(body string) []string {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?is)<button\b[^>]*>.*?</button>`),
+		regexp.MustCompile(`(?is)<a\b[^>]*>.*?</a>`),
+	}
+	stripTags := regexp.MustCompile(`<[^>]+>`)
+	var controls []string
+	for _, pattern := range patterns {
+		for _, control := range pattern.FindAllString(body, -1) {
+			if !strings.Contains(control, `navbar-toggler-icon`) && !strings.Contains(control, `class="ti `) {
+				continue
+			}
+			openEnd := strings.IndexByte(control, '>')
+			closeStart := strings.LastIndexByte(control, '<')
+			if openEnd == -1 || closeStart <= openEnd {
+				continue
+			}
+			visibleText := strings.TrimSpace(stripTags.ReplaceAllString(control[openEnd+1:closeStart], ""))
+			if visibleText == "" {
+				controls = append(controls, control)
+			}
+		}
+	}
+	return controls
+}
+
+func hasAccessibleName(control string) bool {
+	openEnd := strings.IndexByte(control, '>')
+	if openEnd == -1 {
+		return false
+	}
+	startTag := control[:openEnd+1]
+	for _, attribute := range []string{"aria-label", "aria-labelledby"} {
+		if value, ok := htmlAttributeValue(startTag, attribute); ok && strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func readTemplateSource(t *testing.T, name string) string {
