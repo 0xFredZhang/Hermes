@@ -13,7 +13,7 @@
       {{if .Error}}
       <div class="alert alert-danger form-error-summary" role="alert">
         <p>{{.Error}}</p>
-        {{range $name, $message := .FieldErrors}}<a href="#field-{{$name}}">{{$message}}</a>{{end}}
+        {{range $name, $message := .FieldErrors}}{{if and (eq $name "params") $.ParamErrorField}}<a href="#error-{{$.ParamErrorField}}">{{$message}}</a>{{else}}<a href="#field-{{$name}}">{{$message}}</a>{{end}}{{end}}
       </div>
       {{end}}
       {{if or (not .Projects) (not .Accounts)}}
@@ -59,7 +59,7 @@
       <input type="hidden" name="selected_instance_type" data-selection-hint="instanceType" value="{{$f.Params.EC2.InstanceType}}">
       <input type="hidden" name="selected_ami" data-selection-hint="ami" value="{{$f.Params.EC2.AMI}}">
 
-      <fieldset class="blueprint-section" data-blueprint-section="compute" id="field-params"{{if index .FieldErrors "params"}} aria-describedby="error-params"{{end}}>
+      <fieldset class="blueprint-section" data-blueprint-section="compute" id="field-params"{{if and (index .FieldErrors "params") (not .ParamErrorField)}} aria-describedby="error-params"{{end}}>
         <legend class="blueprint-section-title">计算与访问</legend>
         <div class="form-grid select-filters">
           <div class="blueprint-field">
@@ -74,11 +74,13 @@
         <div class="form-grid">
           <div class="blueprint-field">
             <label class="form-label" for="region-select">Region *</label>
-            <select class="form-select{{if eq .ParamErrorField "region"}} is-invalid{{end}}" name="region" id="region-select" data-metadata-source="region" required{{if eq .ParamErrorField "region"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/instance-types" hx-trigger="change" hx-target="#instance-type-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='selected_instance_type']"><option value="{{$f.Params.Region}}" selected>{{$f.Params.Region}}</option></select>
+            <select class="form-select{{if eq .ParamErrorField "region"}} is-invalid{{end}}" name="region" id="region-select" data-metadata-source="region" required{{if eq .ParamErrorField "region"}} aria-invalid="true" aria-describedby="error-region"{{end}} hx-get="/blueprints/instance-types" hx-trigger="change" hx-target="#instance-type-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='selected_instance_type']"><option value="{{$f.Params.Region}}" selected>{{$f.Params.Region}}</option></select>
+            {{if eq .ParamErrorField "region"}}<div class="invalid-feedback" id="error-region" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="instance-type-select">实例规格 *</label>
-            <select class="form-select{{if eq .ParamErrorField "instance_type"}} is-invalid{{end}}" name="instance_type" id="instance-type-select" data-metadata-source="instanceType" required{{if eq .ParamErrorField "instance_type"}} aria-invalid="true" aria-describedby="error-params"{{end}} hx-get="/blueprints/amis" hx-trigger="change" hx-target="#ami-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type'],[name='selected_ami']"><option value="{{$f.Params.EC2.InstanceType}}" selected>{{$f.Params.EC2.InstanceType}}{{if eq $f.Params.EC2.InstanceType "t3.micro"}} · 2C1G{{end}}</option></select>
+            <select class="form-select{{if eq .ParamErrorField "instance_type"}} is-invalid{{end}}" name="instance_type" id="instance-type-select" data-metadata-source="instanceType" required{{if eq .ParamErrorField "instance_type"}} aria-invalid="true" aria-describedby="error-instance_type"{{end}} hx-get="/blueprints/amis" hx-trigger="change" hx-target="#ami-select" hx-swap="innerHTML" hx-include="[name='cloud_account_id'],[name='region'],[name='instance_type'],[name='selected_ami']"><option value="{{$f.Params.EC2.InstanceType}}" selected>{{$f.Params.EC2.InstanceType}}{{if eq $f.Params.EC2.InstanceType "t3.micro"}} · 2C1G{{end}}</option></select>
+            {{if eq .ParamErrorField "instance_type"}}<div class="invalid-feedback" id="error-instance_type" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="ami-select">AMI</label>
@@ -86,11 +88,13 @@
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="instance-count">数量 *</label>
-            <input class="form-control{{if eq .ParamErrorField "count"}} is-invalid{{end}}" id="instance-count" name="count" type="number" value="{{$f.Params.EC2.Count}}" min="1" max="10" required{{if eq .ParamErrorField "count"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+            <input class="form-control{{if eq .ParamErrorField "count"}} is-invalid{{end}}" id="instance-count" name="count" type="number" value="{{$f.Params.EC2.Count}}" min="1" max="10" required{{if eq .ParamErrorField "count"}} aria-invalid="true" aria-describedby="error-count"{{end}}>
+            {{if eq .ParamErrorField "count"}}<div class="invalid-feedback" id="error-count" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="root-volume-size">系统盘 GB *</label>
-            <input class="form-control{{if eq .ParamErrorField "root_volume_gb"}} is-invalid{{end}}" id="root-volume-size" name="root_volume_gb" type="number" value="{{$f.Params.EC2.RootVolumeGB}}" min="8" required{{if eq .ParamErrorField "root_volume_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+            <input class="form-control{{if eq .ParamErrorField "root_volume_gb"}} is-invalid{{end}}" id="root-volume-size" name="root_volume_gb" type="number" value="{{$f.Params.EC2.RootVolumeGB}}" min="8" required{{if eq .ParamErrorField "root_volume_gb"}} aria-invalid="true" aria-describedby="error-root_volume_gb"{{end}}>
+            {{if eq .ParamErrorField "root_volume_gb"}}<div class="invalid-feedback" id="error-root_volume_gb" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="key-pair-name">Key Pair</label>
@@ -102,18 +106,21 @@
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="ingress-port">入站端口</label>
-            <input class="form-control{{if eq .ParamErrorField "ingress_port"}} is-invalid{{end}}" id="ingress-port" name="ingress_port" type="number" value="{{.IngressPort}}"{{if eq .ParamErrorField "ingress_port"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+            <input class="form-control{{if eq .ParamErrorField "ingress_port"}} is-invalid{{end}}" id="ingress-port" name="ingress_port" type="number" value="{{.IngressPort}}"{{if eq .ParamErrorField "ingress_port"}} aria-invalid="true" aria-describedby="error-ingress_port"{{end}}>
+            {{if eq .ParamErrorField "ingress_port"}}<div class="invalid-feedback" id="error-ingress_port" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="ingress-protocol">协议</label>
-            <select class="form-select{{if eq .ParamErrorField "ingress_protocol"}} is-invalid{{end}}" id="ingress-protocol" name="ingress_protocol"{{if eq .ParamErrorField "ingress_protocol"}} aria-invalid="true" aria-describedby="error-params"{{end}}><option value=""{{if not .HasIngress}} selected{{end}}>请选择</option><option value="tcp"{{if eq .IngressProtocol "tcp"}} selected{{end}}>tcp</option><option value="udp"{{if eq .IngressProtocol "udp"}} selected{{end}}>udp</option></select>
+            <select class="form-select{{if eq .ParamErrorField "ingress_protocol"}} is-invalid{{end}}" id="ingress-protocol" name="ingress_protocol"{{if eq .ParamErrorField "ingress_protocol"}} aria-invalid="true" aria-describedby="error-ingress_protocol"{{end}}><option value=""{{if not .HasIngress}} selected{{end}}>请选择</option><option value="tcp"{{if eq .IngressProtocol "tcp"}} selected{{end}}>tcp</option><option value="udp"{{if eq .IngressProtocol "udp"}} selected{{end}}>udp</option></select>
+            {{if eq .ParamErrorField "ingress_protocol"}}<div class="invalid-feedback" id="error-ingress_protocol" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
           <div class="blueprint-field">
             <label class="form-label" for="ingress-cidr">来源 CIDR</label>
-            <input class="form-control{{if eq .ParamErrorField "ingress_cidr"}} is-invalid{{end}}" id="ingress-cidr" name="ingress_cidr" value="{{.IngressCIDR}}"{{if eq .ParamErrorField "ingress_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+            <input class="form-control{{if eq .ParamErrorField "ingress_cidr"}} is-invalid{{end}}" id="ingress-cidr" name="ingress_cidr" value="{{.IngressCIDR}}"{{if eq .ParamErrorField "ingress_cidr"}} aria-invalid="true" aria-describedby="error-ingress_cidr"{{end}}>
+            {{if eq .ParamErrorField "ingress_cidr"}}<div class="invalid-feedback" id="error-ingress_cidr" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
           </div>
         </div>
-        {{with index .FieldErrors "params"}}<div class="invalid-feedback" id="error-params" role="alert">{{.}}</div>{{end}}
+        {{if and (index .FieldErrors "params") (not .ParamErrorField)}}<div class="invalid-feedback d-block" id="error-params" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
       </fieldset>
 
       <fieldset class="blueprint-section disclosure" data-blueprint-section="network" data-disclosure>
@@ -129,11 +136,13 @@
           <div class="form-grid">
             <div class="blueprint-field">
               <label class="form-label" for="network-vpc-cidr">VPC CIDR</label>
-              <input class="form-control{{if eq .ParamErrorField "network_vpc_cidr"}} is-invalid{{end}}" id="network-vpc-cidr" name="network_vpc_cidr" value="{{$f.Params.Network.VPCCIDR}}"{{if eq .ParamErrorField "network_vpc_cidr"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "network_vpc_cidr"}} is-invalid{{end}}" id="network-vpc-cidr" name="network_vpc_cidr" value="{{$f.Params.Network.VPCCIDR}}"{{if eq .ParamErrorField "network_vpc_cidr"}} aria-invalid="true" aria-describedby="error-network_vpc_cidr"{{end}}>
+              {{if eq .ParamErrorField "network_vpc_cidr"}}<div class="invalid-feedback" id="error-network_vpc_cidr" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="network-public-subnets">公网子网 CIDR</label>
-              <input class="form-control{{if eq .ParamErrorField "network_public_subnet_cidrs"}} is-invalid{{end}}" id="network-public-subnets" name="network_public_subnet_cidrs" value="{{range $i,$v := $f.Params.Network.PublicSubnetCIDRs}}{{if $i}},{{end}}{{$v}}{{end}}"{{if eq .ParamErrorField "network_public_subnet_cidrs"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "network_public_subnet_cidrs"}} is-invalid{{end}}" id="network-public-subnets" name="network_public_subnet_cidrs" value="{{range $i,$v := $f.Params.Network.PublicSubnetCIDRs}}{{if $i}},{{end}}{{$v}}{{end}}"{{if eq .ParamErrorField "network_public_subnet_cidrs"}} aria-invalid="true" aria-describedby="error-network_public_subnet_cidrs"{{end}}>
+              {{if eq .ParamErrorField "network_public_subnet_cidrs"}}<div class="invalid-feedback" id="error-network_public_subnet_cidrs" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
           </div>
         </div>
@@ -152,23 +161,28 @@
           <div class="form-grid">
             <div class="blueprint-field">
               <label class="form-label" for="rds-engine-version">版本</label>
-              <input class="form-control{{if eq .ParamErrorField "rds_engine_version"}} is-invalid{{end}}" id="rds-engine-version" name="rds_engine_version" value="{{$f.Params.RDS.EngineVersion}}"{{if eq .ParamErrorField "rds_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "rds_engine_version"}} is-invalid{{end}}" id="rds-engine-version" name="rds_engine_version" value="{{$f.Params.RDS.EngineVersion}}"{{if eq .ParamErrorField "rds_engine_version"}} aria-invalid="true" aria-describedby="error-rds_engine_version"{{end}}>
+              {{if eq .ParamErrorField "rds_engine_version"}}<div class="invalid-feedback" id="error-rds_engine_version" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="rds-instance-class">规格</label>
-              <input class="form-control{{if eq .ParamErrorField "rds_instance_class"}} is-invalid{{end}}" id="rds-instance-class" name="rds_instance_class" value="{{$f.Params.RDS.InstanceClass}}"{{if eq .ParamErrorField "rds_instance_class"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "rds_instance_class"}} is-invalid{{end}}" id="rds-instance-class" name="rds_instance_class" value="{{$f.Params.RDS.InstanceClass}}"{{if eq .ParamErrorField "rds_instance_class"}} aria-invalid="true" aria-describedby="error-rds_instance_class"{{end}}>
+              {{if eq .ParamErrorField "rds_instance_class"}}<div class="invalid-feedback" id="error-rds_instance_class" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="rds-storage">存储 GB</label>
-              <input class="form-control{{if eq .ParamErrorField "rds_allocated_storage_gb"}} is-invalid{{end}}" id="rds-storage" name="rds_allocated_storage_gb" type="number" value="{{$f.Params.RDS.AllocatedStorageGB}}" min="20"{{if eq .ParamErrorField "rds_allocated_storage_gb"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "rds_allocated_storage_gb"}} is-invalid{{end}}" id="rds-storage" name="rds_allocated_storage_gb" type="number" value="{{$f.Params.RDS.AllocatedStorageGB}}" min="20"{{if eq .ParamErrorField "rds_allocated_storage_gb"}} aria-invalid="true" aria-describedby="error-rds_allocated_storage_gb"{{end}}>
+              {{if eq .ParamErrorField "rds_allocated_storage_gb"}}<div class="invalid-feedback" id="error-rds_allocated_storage_gb" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="rds-db-name">数据库名</label>
-              <input class="form-control{{if eq .ParamErrorField "rds_db_name"}} is-invalid{{end}}" id="rds-db-name" name="rds_db_name" value="{{$f.Params.RDS.DBName}}"{{if eq .ParamErrorField "rds_db_name"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "rds_db_name"}} is-invalid{{end}}" id="rds-db-name" name="rds_db_name" value="{{$f.Params.RDS.DBName}}"{{if eq .ParamErrorField "rds_db_name"}} aria-invalid="true" aria-describedby="error-rds_db_name"{{end}}>
+              {{if eq .ParamErrorField "rds_db_name"}}<div class="invalid-feedback" id="error-rds_db_name" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="rds-username">用户名</label>
-              <input class="form-control{{if eq .ParamErrorField "rds_username"}} is-invalid{{end}}" id="rds-username" name="rds_username" value="{{$f.Params.RDS.Username}}"{{if eq .ParamErrorField "rds_username"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "rds_username"}} is-invalid{{end}}" id="rds-username" name="rds_username" value="{{$f.Params.RDS.Username}}"{{if eq .ParamErrorField "rds_username"}} aria-invalid="true" aria-describedby="error-rds_username"{{end}}>
+              {{if eq .ParamErrorField "rds_username"}}<div class="invalid-feedback" id="error-rds_username" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
           </div>
         </div>
@@ -193,15 +207,18 @@
           <div class="form-grid">
             <div class="blueprint-field">
               <label class="form-label" for="redis-engine-version">版本</label>
-              <input class="form-control{{if eq .ParamErrorField "redis_engine_version"}} is-invalid{{end}}" id="redis-engine-version" name="redis_engine_version" value="{{$f.Params.Redis.EngineVersion}}"{{if eq .ParamErrorField "redis_engine_version"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "redis_engine_version"}} is-invalid{{end}}" id="redis-engine-version" name="redis_engine_version" value="{{$f.Params.Redis.EngineVersion}}"{{if eq .ParamErrorField "redis_engine_version"}} aria-invalid="true" aria-describedby="error-redis_engine_version"{{end}}>
+              {{if eq .ParamErrorField "redis_engine_version"}}<div class="invalid-feedback" id="error-redis_engine_version" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="redis-node-type">规格</label>
-              <input class="form-control{{if eq .ParamErrorField "redis_node_type"}} is-invalid{{end}}" id="redis-node-type" name="redis_node_type" value="{{$f.Params.Redis.NodeType}}"{{if eq .ParamErrorField "redis_node_type"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "redis_node_type"}} is-invalid{{end}}" id="redis-node-type" name="redis_node_type" value="{{$f.Params.Redis.NodeType}}"{{if eq .ParamErrorField "redis_node_type"}} aria-invalid="true" aria-describedby="error-redis_node_type"{{end}}>
+              {{if eq .ParamErrorField "redis_node_type"}}<div class="invalid-feedback" id="error-redis_node_type" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
             <div class="blueprint-field">
               <label class="form-label" for="redis-node-count">节点数</label>
-              <input class="form-control{{if eq .ParamErrorField "redis_node_count"}} is-invalid{{end}}" id="redis-node-count" name="redis_node_count" type="number" value="{{$f.Params.Redis.NodeCount}}" min="1" max="5"{{if eq .ParamErrorField "redis_node_count"}} aria-invalid="true" aria-describedby="error-params"{{end}}>
+              <input class="form-control{{if eq .ParamErrorField "redis_node_count"}} is-invalid{{end}}" id="redis-node-count" name="redis_node_count" type="number" value="{{$f.Params.Redis.NodeCount}}" min="1" max="5"{{if eq .ParamErrorField "redis_node_count"}} aria-invalid="true" aria-describedby="error-redis_node_count"{{end}}>
+              {{if eq .ParamErrorField "redis_node_count"}}<div class="invalid-feedback" id="error-redis_node_count" role="alert">{{index .FieldErrors "params"}}</div>{{end}}
             </div>
           </div>
         </div>

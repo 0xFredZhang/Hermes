@@ -157,7 +157,7 @@
           </dl>
         </section>
       {{end}}
-      {{if or .RDSEndpoint .RDSAddress}}
+      {{if or .RDSEndpoint .RDSAddress .RDSPort .RDSUsername .HasRDSSecret}}
         <section class="output-section" aria-labelledby="rds-output-title-{{.Env.ID}}">
           <h4 class="output-title" id="rds-output-title-{{.Env.ID}}">数据库</h4>
           <dl class="datagrid output-datagrid">
@@ -172,7 +172,7 @@
           {{end}}
         </section>
       {{end}}
-      {{if or .RedisEndpoint .RedisReader}}
+      {{if or .RedisEndpoint .RedisReader .RedisPort .HasRedisSecret}}
         <section class="output-section" aria-labelledby="redis-output-title-{{.Env.ID}}">
           <h4 class="output-title" id="redis-output-title-{{.Env.ID}}">Redis</h4>
           <dl class="datagrid output-datagrid">

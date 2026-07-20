@@ -1645,7 +1645,7 @@ func TestBlueprintParamsErrorAssociatesInvalidControl(t *testing.T) {
 	}
 	body := rec.Body.String()
 	tag := htmlTagContaining(t, body, `name="count"`)
-	if !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="error-params"`) || !strings.Contains(body, `id="error-params"`) {
+	if !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="error-count"`) || !strings.Contains(body, `id="error-count"`) {
 		t.Fatalf("params error is not associated with count: tag=%s body=%s", tag, body)
 	}
 }
@@ -1662,7 +1662,7 @@ func TestBlueprintParamsErrorMarksOnlyIdentifiableControl(t *testing.T) {
 	body := rec.Body.String()
 	region := htmlTagContaining(t, body, `name="region"`)
 	count := htmlTagContaining(t, body, `name="count"`)
-	if !strings.Contains(region, `aria-invalid="true"`) || !strings.Contains(region, `aria-describedby="error-params"`) {
+	if !strings.Contains(region, `aria-invalid="true"`) || !strings.Contains(region, `aria-describedby="error-region"`) || !strings.Contains(body, `id="error-region"`) {
 		t.Fatalf("region error is not associated: %s", region)
 	}
 	if strings.Contains(count, `aria-invalid="true"`) {
@@ -1679,8 +1679,9 @@ func TestBlueprintOptionalParamErrorAssociatesInvalidControl(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422", rec.Code)
 	}
-	tag := htmlTagContaining(t, rec.Body.String(), `name="rds_allocated_storage_gb"`)
-	if !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="error-params"`) {
+	body := rec.Body.String()
+	tag := htmlTagContaining(t, body, `name="rds_allocated_storage_gb"`)
+	if !strings.Contains(tag, `aria-invalid="true"`) || !strings.Contains(tag, `aria-describedby="error-rds_allocated_storage_gb"`) || !strings.Contains(body, `id="error-rds_allocated_storage_gb"`) {
 		t.Fatalf("RDS storage error is not associated: %s", tag)
 	}
 }

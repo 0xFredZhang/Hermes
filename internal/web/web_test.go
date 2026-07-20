@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	xhtml "golang.org/x/net/html"
 )
 
 func TestNewRendererParsesAllPages(t *testing.T) {
@@ -1183,6 +1185,147 @@ func TestBlueprintEditorUsesTablerSections(t *testing.T) {
 	})
 }
 
+func TestBlueprintParamErrorsUseAdjacentFeedback(t *testing.T) {
+	const message = "参数配置无效"
+	tests := []struct {
+		field, tag, controlID string
+	}{
+		{field: "region", tag: "select", controlID: "region-select"},
+		{field: "instance_type", tag: "select", controlID: "instance-type-select"},
+		{field: "count", tag: "input", controlID: "instance-count"},
+		{field: "root_volume_gb", tag: "input", controlID: "root-volume-size"},
+		{field: "ingress_port", tag: "input", controlID: "ingress-port"},
+		{field: "ingress_protocol", tag: "select", controlID: "ingress-protocol"},
+		{field: "ingress_cidr", tag: "input", controlID: "ingress-cidr"},
+		{field: "network_vpc_cidr", tag: "input", controlID: "network-vpc-cidr"},
+		{field: "network_public_subnet_cidrs", tag: "input", controlID: "network-public-subnets"},
+		{field: "rds_engine_version", tag: "input", controlID: "rds-engine-version"},
+		{field: "rds_instance_class", tag: "input", controlID: "rds-instance-class"},
+		{field: "rds_allocated_storage_gb", tag: "input", controlID: "rds-storage"},
+		{field: "rds_db_name", tag: "input", controlID: "rds-db-name"},
+		{field: "rds_username", tag: "input", controlID: "rds-username"},
+		{field: "redis_engine_version", tag: "input", controlID: "redis-engine-version"},
+		{field: "redis_node_type", tag: "input", controlID: "redis-node-type"},
+		{field: "redis_node_count", tag: "input", controlID: "redis-node-count"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.field, func(t *testing.T) {
+			data := blueprintFormRenderData()
+			data["FieldErrors"] = map[string]string{"params": message}
+			data["ParamErrorField"] = tc.field
+			body := renderPageBody(t, "blueprint_form", data)
+			doc := parseHTMLDocument(t, body)
+			errorID := "error-" + tc.field
+
+			control := requireHTMLNodeWithAttribute(t, doc, tc.tag, "id", tc.controlID)
+			requireHTMLNodeClassTokens(t, control, "is-invalid")
+			if got := htmlNodeAttribute(t, control, "aria-invalid"); got != "true" {
+				t.Errorf("%s aria-invalid = %q, want true", tc.controlID, got)
+			}
+			if got := htmlNodeAttribute(t, control, "aria-describedby"); got != errorID {
+				t.Errorf("%s aria-describedby = %q, want %q", tc.controlID, got, errorID)
+			}
+
+			feedbackNodes := htmlElementNodes(doc, "div")
+			var feedbacks []*xhtml.Node
+			for _, node := range feedbackNodes {
+				if id, ok := htmlNodeAttributeValue(node, "id"); ok && id == errorID {
+					feedbacks = append(feedbacks, node)
+				}
+			}
+			if len(feedbacks) != 1 {
+				t.Fatalf("feedback %q count = %d, want 1", errorID, len(feedbacks))
+			}
+			feedback := feedbacks[0]
+			requireHTMLNodeClassTokens(t, feedback, "invalid-feedback")
+			if got := htmlNodeAttribute(t, feedback, "role"); got != "alert" {
+				t.Errorf("%s role = %q, want alert", errorID, got)
+			}
+			if got := strings.TrimSpace(htmlNodeText(feedback)); got != message {
+				t.Errorf("%s text = %q, want %q", errorID, got, message)
+			}
+			if feedback.Parent != control.Parent || !htmlNodeHasClassTokens(feedback.Parent, "blueprint-field") {
+				t.Errorf("%s feedback and %s control are not in the same blueprint field", errorID, tc.controlID)
+			}
+			if previousHTMLElementSibling(feedback) != control {
+				t.Errorf("%s feedback is not the immediate element sibling after %s", errorID, tc.controlID)
+			}
+
+			visibleFeedback := 0
+			for _, node := range feedbackNodes {
+				if htmlNodeHasClassTokens(node, "invalid-feedback") {
+					visibleFeedback++
+				}
+			}
+			if visibleFeedback != 1 {
+				t.Errorf("rendered parameter error has %d feedback nodes, want exactly 1", visibleFeedback)
+			}
+			requireHTMLNodeWithAttribute(t, doc, "a", "href", "#"+errorID)
+			requireUniqueHTMLIDs(t, doc)
+		})
+	}
+
+	t.Run("generic fallback", func(t *testing.T) {
+		data := blueprintFormRenderData()
+		data["FieldErrors"] = map[string]string{"params": message}
+		data["ParamErrorField"] = ""
+		doc := parseHTMLDocument(t, renderPageBody(t, "blueprint_form", data))
+
+		fieldset := requireHTMLNodeWithAttribute(t, doc, "fieldset", "id", "field-params")
+		if got := htmlNodeAttribute(t, fieldset, "aria-describedby"); got != "error-params" {
+			t.Errorf("generic parameter fieldset aria-describedby = %q, want error-params", got)
+		}
+		feedback := requireHTMLNodeWithAttribute(t, doc, "div", "id", "error-params")
+		requireHTMLNodeClassTokens(t, feedback, "invalid-feedback", "d-block")
+		requireHTMLNodeWithAttribute(t, doc, "a", "href", "#field-params")
+		requireUniqueHTMLIDs(t, doc)
+	})
+}
+
+func TestEnvironmentStatusRendersCredentialOnlyOutputs(t *testing.T) {
+	tests := []struct {
+		name, titleID, port, post, target string
+		data                              map[string]any
+	}{
+		{
+			name: "RDS port and secret", titleID: "rds-output-title-9", port: "3306",
+			post: "/environments/9/rds-credentials", target: "rds-credentials-9",
+			data: map[string]any{"RDSPort": "3306", "HasRDSSecret": true},
+		},
+		{
+			name: "Redis port and secret", titleID: "redis-output-title-9", port: "6379",
+			post: "/environments/9/redis-credentials", target: "redis-credentials-9",
+			data: map[string]any{"RedisPort": "6379", "HasRedisSecret": true},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := map[string]any{
+				"Env": map[string]any{"ID": int64(9), "Name": "staging", "Status": "up"},
+			}
+			for key, value := range tc.data {
+				data[key] = value
+			}
+			var rendered bytes.Buffer
+			if err := newTestRenderer(t).RenderPartial(&rendered, "env_status", data); err != nil {
+				t.Fatalf("RenderPartial env_status: %v", err)
+			}
+			doc := parseHTMLDocument(t, rendered.String())
+			section := requireHTMLNodeWithAttribute(t, doc, "section", "aria-labelledby", tc.titleID)
+			if !strings.Contains(htmlNodeText(section), tc.port) {
+				t.Errorf("%s output does not include port %q", tc.name, tc.port)
+			}
+			button := requireHTMLNodeWithAttribute(t, section, "button", "hx-post", tc.post)
+			if got := htmlNodeAttribute(t, button, "hx-target"); got != "#"+tc.target {
+				t.Errorf("%s credential target = %q, want #%s", tc.name, got, tc.target)
+			}
+			requireHTMLNodeWithAttribute(t, section, "div", "id", tc.target)
+		})
+	}
+}
+
 func TestOperationalPagesUseTablerComponents(t *testing.T) {
 	environmentData := map[string]any{
 		"PageTitle": "环境详情", "ActiveNav": "environments",
@@ -1259,11 +1402,17 @@ func TestOperationalPagesUseTablerComponents(t *testing.T) {
 				t.Errorf("live log %s = %q, want %q", attribute, got, want)
 			}
 		}
-		liveBody := regexp.MustCompile(`(?s)<div class="card-body live-job-body">.*?</div>`).FindString(environment)
-		for _, want := range []string{`id="live-job-log"`, `data-job-stream-status`, `role="status"`, `aria-live="polite"`} {
-			if !strings.Contains(liveBody, want) {
-				t.Errorf("live log and announcement must remain siblings; missing %q: %s", want, liveBody)
-			}
+		environmentDoc := parseHTMLDocument(t, environment)
+		liveLog := requireHTMLNodeWithAttribute(t, environmentDoc, "pre", "id", "live-job-log")
+		streamStatus := requireHTMLNodeWithAttribute(t, environmentDoc, "p", "data-job-stream-status", "")
+		if liveLog.Parent != streamStatus.Parent || !htmlNodeHasClassTokens(liveLog.Parent, "live-job-body") {
+			t.Error("live log and stream status must share the live-job-body parent")
+		}
+		if got := htmlNodeAttribute(t, streamStatus, "role"); got != "status" {
+			t.Errorf("stream status role = %q, want status", got)
+		}
+		if got := htmlNodeAttribute(t, streamStatus, "aria-live"); got != "polite" {
+			t.Errorf("stream status aria-live = %q, want polite", got)
 		}
 
 		history := requireTagWithAttribute(t, environment, "div", "id", "job-history")
@@ -1305,23 +1454,28 @@ func TestOperationalPagesUseTablerComponents(t *testing.T) {
 		}
 		requireTagWithClassTokens(t, job, "section", "card", "operational-card", "job-log-card")
 
-		copyActions := regexp.MustCompile(`(?s)<div class="copy-log-actions">.*?</div>`).FindString(job)
-		copyButton := requireTagWithAttribute(t, copyActions, "button", "data-copy-log", "")
-		requireClassTokens(t, copyButton, "btn", "btn-outline-secondary")
+		jobDoc := parseHTMLDocument(t, job)
+		copyButton := requireHTMLNodeWithAttribute(t, jobDoc, "button", "data-copy-log", "")
+		requireHTMLNodeClassTokens(t, copyButton, "btn", "btn-outline-secondary")
 		for attribute, want := range map[string]string{
 			"type": "button", "data-copy-target": "job-log", "data-loading-label": "复制中…", "aria-controls": "job-log",
 		} {
-			if got := htmlAttribute(t, copyButton, attribute); got != want {
+			if got := htmlNodeAttribute(t, copyButton, attribute); got != want {
 				t.Errorf("copy button %s = %q, want %q", attribute, got, want)
 			}
 		}
-		if _, ok := htmlAttributeValue(copyButton, "hidden"); !ok {
+		if _, ok := htmlNodeAttributeValue(copyButton, "hidden"); !ok {
 			t.Error("copy button must remain hidden until JavaScript enhancement")
 		}
-		for _, want := range []string{`data-copy-status`, `role="status"`, `aria-live="polite"`} {
-			if !strings.Contains(copyActions, want) {
-				t.Errorf("copy button and status must remain siblings; missing %q: %s", want, copyActions)
-			}
+		copyStatus := requireHTMLNodeWithAttribute(t, jobDoc, "span", "data-copy-status", "")
+		if copyButton.Parent != copyStatus.Parent || !htmlNodeHasClassTokens(copyButton.Parent, "copy-log-actions") {
+			t.Error("copy button and copy status must share the copy-log-actions parent")
+		}
+		if got := htmlNodeAttribute(t, copyStatus, "role"); got != "status" {
+			t.Errorf("copy status role = %q, want status", got)
+		}
+		if got := htmlNodeAttribute(t, copyStatus, "aria-live"); got != "polite" {
+			t.Errorf("copy status aria-live = %q, want polite", got)
 		}
 		jobLog := requireTagWithAttribute(t, job, "pre", "id", "job-log")
 		requireClassTokens(t, jobLog, "log-panel", "log-panel-full")
@@ -2091,6 +2245,125 @@ func htmlAttributeValue(tag, name string) (string, bool) {
 		return "", false
 	}
 	return match[1], true
+}
+
+func parseHTMLDocument(t *testing.T, body string) *xhtml.Node {
+	t.Helper()
+	doc, err := xhtml.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("parse rendered HTML: %v", err)
+	}
+	return doc
+}
+
+func htmlElementNodes(root *xhtml.Node, tagName string) []*xhtml.Node {
+	var nodes []*xhtml.Node
+	var walk func(*xhtml.Node)
+	walk = func(node *xhtml.Node) {
+		if node.Type == xhtml.ElementNode && (tagName == "*" || node.Data == tagName) {
+			nodes = append(nodes, node)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(root)
+	return nodes
+}
+
+func requireHTMLNodeWithAttribute(t *testing.T, root *xhtml.Node, tagName, attribute, value string) *xhtml.Node {
+	t.Helper()
+	for _, node := range htmlElementNodes(root, tagName) {
+		if got, ok := htmlNodeAttributeValue(node, attribute); ok && got == value {
+			return node
+		}
+	}
+	t.Fatalf("rendered HTML has no <%s> with %s=%q", tagName, attribute, value)
+	return nil
+}
+
+func htmlNodeAttribute(t *testing.T, node *xhtml.Node, name string) string {
+	t.Helper()
+	value, ok := htmlNodeAttributeValue(node, name)
+	if !ok {
+		t.Fatalf("<%s> has no %s attribute", node.Data, name)
+	}
+	return value
+}
+
+func htmlNodeAttributeValue(node *xhtml.Node, name string) (string, bool) {
+	for _, attribute := range node.Attr {
+		if attribute.Key == name {
+			return attribute.Val, true
+		}
+	}
+	return "", false
+}
+
+func htmlNodeHasClassTokens(node *xhtml.Node, required ...string) bool {
+	if node == nil {
+		return false
+	}
+	classValue, ok := htmlNodeAttributeValue(node, "class")
+	if !ok {
+		return false
+	}
+	classes := make(map[string]struct{}, len(strings.Fields(classValue)))
+	for _, className := range strings.Fields(classValue) {
+		classes[className] = struct{}{}
+	}
+	for _, requiredClass := range required {
+		if _, ok := classes[requiredClass]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func requireHTMLNodeClassTokens(t *testing.T, node *xhtml.Node, required ...string) {
+	t.Helper()
+	if !htmlNodeHasClassTokens(node, required...) {
+		t.Errorf("<%s> missing class tokens %q", node.Data, required)
+	}
+}
+
+func previousHTMLElementSibling(node *xhtml.Node) *xhtml.Node {
+	for sibling := node.PrevSibling; sibling != nil; sibling = sibling.PrevSibling {
+		if sibling.Type == xhtml.ElementNode {
+			return sibling
+		}
+	}
+	return nil
+}
+
+func htmlNodeText(node *xhtml.Node) string {
+	var text strings.Builder
+	var walk func(*xhtml.Node)
+	walk = func(current *xhtml.Node) {
+		if current.Type == xhtml.TextNode {
+			text.WriteString(current.Data)
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(node)
+	return text.String()
+}
+
+func requireUniqueHTMLIDs(t *testing.T, root *xhtml.Node) {
+	t.Helper()
+	counts := make(map[string]int)
+	for _, node := range htmlElementNodes(root, "*") {
+		if id, ok := htmlNodeAttributeValue(node, "id"); ok {
+			counts[id]++
+		}
+	}
+	for id, count := range counts {
+		if count != 1 {
+			t.Errorf("rendered HTML id %q occurs %d times, want once", id, count)
+		}
+	}
 }
 
 func iconOnlyHTMLControls(body string) []string {
